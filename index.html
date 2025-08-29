@@ -49,7 +49,7 @@
       const text = document.getElementById("text").value;
       const dateTime = document.getElementById("dateTime").value;
 
-      const res = await fetch("http://localhost:3000/schedule-email", {
+      const res = await fetch("https://email-scheduler.onrender.com/schedule-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ to, subject, text, dateTime })

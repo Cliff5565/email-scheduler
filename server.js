@@ -1,20 +1,24 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const nodemailer = require("nodemailer");
-const { Queue, Worker } = require("bullmq");
-const Redis = require("ioredis");
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
-const chalk = require("chalk");
+import express from "express";
+import bodyParser from "body-parser";
+import cors from "cors";
+import nodemailer from "nodemailer";
+import { Queue, Worker } from "bullmq";
+import Redis from "ioredis";
+import multer from "multer";
+import path, { dirname } from "path";
+import fs from "fs";
+import chalk from "chalk";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Multer for uploads (Render ephemeral disk)
-const upload = multer({ dest: "uploads/" });
+// Multer setup for file uploads
+const upload = multer({ dest: path.join(__dirname, "uploads/") });
 
 // Redis connection (Upstash)
 const redisConnection = new Redis(process.env.REDIS_URL, {
@@ -51,13 +55,14 @@ new Worker(
 
     console.log(chalk.greenBright(`✅ Email sent to: ${to}`));
 
-    // Auto-delete uploaded files
+    // Delete uploaded files
     if (attachments && attachments.length > 0) {
       attachments.forEach((file) => {
         if (file.path) {
           fs.unlink(file.path, (err) => {
-            if (err) console.error(chalk.red(`❌ Failed to delete file: ${file.path}`), err);
-            else console.log(chalk.yellow(`🗑️ Deleted file: ${file.path}`));
+            if (err)
+              console.error(chalk.red(`❌ Failed to delete file: ${file.path}`));
+            else console.log(chalk.yellow(`🗑 Deleted file: ${file.path}`));
           });
         }
       });
@@ -88,7 +93,9 @@ app.post("/schedule-email", upload.array("attachments"), async (req, res) => {
       { delay }
     );
 
-    console.log(chalk.blue(`📩 Job queued for: ${to}, ID: ${job.id}, delay: ${delay}ms`));
+    console.log(
+      chalk.blue(`📩 Job queued: ${to}, ID: ${job.id}, delay: ${delay}ms`)
+    );
 
     res.json({ message: "Email scheduled successfully", jobId: job.id });
   } catch (err) {

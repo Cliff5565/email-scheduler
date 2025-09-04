@@ -1,64 +1,100 @@
-<!DOCTYPE html><html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://puc.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;">
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Email Scheduler</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 0; padding: 20px;
-      background: #f9f9f9;
+      background: #f4f4f4;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
     }
     .container {
-      max-width: 500px; margin: auto;
-      background: white; padding: 20px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      background: #fff;
+      padding: 2rem;
       border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      max-width: 400px;
+      width: 100%;
     }
-    input, textarea, button {
-      width: 100%; margin-top: 10px;
-      padding: 10px; border: 1px solid #ccc;
-      border-radius: 5px; font-size: 16px;
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      margin: 0.5rem 0 0.2rem;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
     }
     button {
-      background: #4CAF50; color: white;
-      border: none; cursor: pointer;
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 0.7rem;
+      margin-top: 1rem;
+      width: 100%;
+      border-radius: 4px;
+      cursor: pointer;
     }
     button:hover {
-      background: #45a049;
+      background: #0056b3;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>Schedule an Email</h2>
+    <h1>Schedule Email</h1>
     <form id="emailForm">
-      <input type="email" id="to" placeholder="Recipient Email" required="">
-      <input type="text" id="subject" placeholder="Subject" required="">
-      <textarea id="text" placeholder="Message" rows="5" required=""></textarea>
-      <input type="datetime-local" id="dateTime" required="">
-      <button type="submit">Schedule Email</button>
+      <label for="to">Recipient Email</label>
+      <input type="email" id="to" name="to" required />
+
+      <label for="subject">Subject</label>
+      <input type="text" id="subject" name="subject" required />
+
+      <label for="message">Message</label>
+      <textarea id="message" name="message" rows="4" required></textarea>
+
+      <label for="scheduleTime">Schedule Time</label>
+      <input type="datetime-local" id="scheduleTime" name="scheduleTime" required />
+
+      <button type="submit">Schedule</button>
     </form>
-    <p id="response"></p>
+    <p id="result"></p>
   </div>
 
   <script>
-    document.getElementById("emailForm").addEventListener("submit", async (e) => {
+    const form = document.getElementById('emailForm');
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const to = document.getElementById("to").value;
-      const subject = document.getElementById("subject").value;
-      const text = document.getElementById("text").value;
-      const dateTime = document.getElementById("dateTime").value;
+      const data = {
+        to: form.to.value,
+        subject: form.subject.value,
+        message: form.message.value,
+        scheduleTime: form.scheduleTime.value
+      };
 
-      const res = await fetch("https://email-scheduler-7fxr.onrender.com", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to, subject, text, dateTime })
-      });
-
-      const data = await res.json();
-      document.getElementById("response").innerText = data.message;
+      try {
+        const response = await fetch('/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await response.text();
+        document.getElementById('result').innerText = result;
+      } catch (err) {
+        document.getElementById('result').innerText = 'Error scheduling email.';
+      }
     });
   </script>
-
-
-</body></html>
+</body>
+</html>

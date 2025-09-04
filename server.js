@@ -1,130 +1,82 @@
-import express from "express";
-import bodyParser from "body-parser";
-import cors from "cors";
-import nodemailer from "nodemailer";
-import { Queue, Worker } from "bullmq";
-import Redis from "ioredis";
-import multer from "multer";
-import path, { dirname } from "path";
-import fs from "fs";
-import chalk from "chalk";
-import { fileURLToPath } from "url";
+// Use ES Module syntax, so make sure package.json has "type": "module"
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import express from "express";
+import nodemailer from "nodemailer";
+import cron from "node-cron";
 
 const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+const port = process.env.PORT || 10000;
 
-// Multer setup for file uploads
-const upload = multer({ dest: path.join(__dirname, "uploads/") });
+// Middleware
+app.use(express.json());
 
-// Redis connection (Upstash)
-const redisConnection = new Redis(process.env.REDIS_URL, {
-  maxRetriesPerRequest: null,
-  tls: { rejectUnauthorized: false },
-});
+// In-memory task store (replace with DB for production)
+const scheduledTasks = [];
 
-// BullMQ queue
-const emailQueue = new Queue("emails", { connection: redisConnection });
-
-// Nodemailer transporter
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_PASS,
-  },
-});
-
-// Worker: process queued emails
-new Worker(
-  "emails",
-  async (job) => {
-    const { to, subject, text, html, attachments } = job.data;
-
-    await transporter.sendMail({
-      from: process.env.GMAIL_USER,
-      to,
-      subject,
-      text,
-      html,
-      attachments,
-    });
-
-    console.log(chalk.greenBright(`✅ Email sent to: ${to}`));
-
-    // Delete uploaded files
-    if (attachments && attachments.length > 0) {
-      attachments.forEach((file) => {
-        if (file.path) {
-          fs.unlink(file.path, (err) => {
-            if (err)
-              console.error(chalk.red(`❌ Failed to delete file: ${file.path}`));
-            else console.log(chalk.yellow(`🗑 Deleted file: ${file.path}`));
-          });
-        }
-      });
-    }
-  },
-  { connection: redisConnection }
-);
-
-// API: Schedule email
-app.post("/schedule-email", upload.array("attachments"), async (req, res) => {
-  try {
-    const { to, subject, text, html, dateTime } = req.body;
-    const delay = new Date(dateTime).getTime() - Date.now();
-
-    if (isNaN(delay) || delay < 0) {
-      console.log(chalk.red("❌ Invalid dateTime received"));
-      return res.status(400).json({ message: "dateTime must be in the future" });
-    }
-
-    const attachments = (req.files || []).map((file) => ({
-      filename: file.originalname,
-      path: path.resolve(file.path),
-    }));
-
-    const job = await emailQueue.add(
-      "sendEmail",
-      { to, subject, text, html, attachments },
-      { delay }
-    );
-
-    console.log(
-      chalk.blue(`📩 Job queued: ${to}, ID: ${job.id}, delay: ${delay}ms`)
-    );
-
-    res.json({ message: "Email scheduled successfully", jobId: job.id });
-  } catch (err) {
-    console.error(chalk.red("❌ Error scheduling email:"), err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// API: Check job status
-app.get("/job-status/:id", async (req, res) => {
-  const job = await emailQueue.getJob(req.params.id);
-  if (!job) {
-    console.log(chalk.gray(`Job not found: ${req.params.id}`));
-    return res.status(404).json({ status: "not found" });
-  }
-
-  const state = await job.getState();
-  console.log(chalk.cyan(`ℹ️ Job ${req.params.id} status: ${state}`));
-
-  res.json({ status: state });
-});
-
-// Health check
+// Root route
 app.get("/", (req, res) => {
   res.send("🚀 Email Scheduler backend is running!");
 });
 
+// Schedule email route
+app.post("/schedule", (req, res) => {
+  const { to, subject, message, scheduleTime } = req.body;
+
+  if (!to || !subject || !message || !scheduleTime) {
+    return res.status(400).send("❌ Missing required fields");
+  }
+
+  // Convert scheduleTime to Date
+  const runAt = new Date(scheduleTime);
+  if (isNaN(runAt.getTime())) {
+    return res.status(400).send("❌ Invalid scheduleTime format");
+  }
+
+  // Calculate cron expression
+  const minute = runAt.getMinutes();
+  const hour = runAt.getHours();
+  const day = runAt.getDate();
+  const month = runAt.getMonth() + 1; // cron months are 1-12
+
+  const cronExp = `${minute} ${hour} ${day} ${month} *`;
+
+  console.log(`📅 Scheduling email at ${runAt} with cron: ${cronExp}`);
+
+  // Store task
+  const task = cron.schedule(cronExp, async () => {
+    try {
+      await sendEmail(to, subject, message);
+      console.log(`✅ Email sent to ${to} at ${new Date().toISOString()}`);
+    } catch (err) {
+      console.error("❌ Error sending email:", err);
+    }
+  });
+
+  scheduledTasks.push({ to, subject, message, scheduleTime, task });
+
+  res.send(`✅ Email scheduled for ${runAt.toString()}`);
+});
+
+// Nodemailer transport
+async function sendEmail(to, subject, text) {
+  // ⚠️ Replace with your SMTP config or use environment variables
+  let transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USER, // set in Render Dashboard
+      pass: process.env.EMAIL_PASS, // set in Render Dashboard
+    },
+  });
+
+  return transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to,
+    subject,
+    text,
+  });
+}
+
 // Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(chalk.magentaBright(`🚀 Server running on port ${PORT}`));
+app.listen(port, "0.0.0.0", () => {
+  console.log(`🚀 Server running on port ${port}`);
 });

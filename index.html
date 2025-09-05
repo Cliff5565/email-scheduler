@@ -1,91 +1,220 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Email Scheduler</title>
+  <meta charset="UTF-8">
+  <title>Email Scheduler - Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
   <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-dark: #3730a3;
+      --bg: #f3f4f6;
+      --card-bg: #ffffff;
+      --text: #111827;
+      --text-light: #6b7280;
+      --radius: 10px;
+      --shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      background: #f0f2f5;
+      background: var(--bg);
       display: flex;
-      justify-content: center;
       align-items: center;
+      justify-content: center;
       min-height: 100vh;
-      margin: 0;
+      padding: 20px;
     }
+
     .card {
-      background: #fff;
-      padding: 2rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      max-width: 400px;
+      background: var(--card-bg);
+      padding: 2.5rem;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
       width: 100%;
+      max-width: 420px;
+      text-align: center;
     }
-    h1 { text-align: center; }
-    label { display: block; margin: 0.5rem 0 0.2rem; }
-    input, textarea {
-      width: 100%;
-      padding: 0.5rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+
+    h1 {
+      margin-bottom: 1rem;
+      font-size: 1.8rem;
+      color: var(--text);
     }
-    button {
-      margin-top: 1rem;
+    p.subtitle {
+      margin-bottom: 2rem;
+      color: var(--text-light);
+    }
+
+    .form-group {
+      margin-bottom: 1.2rem;
+      text-align: left;
+    }
+
+    input {
       width: 100%;
       padding: 0.75rem;
-      background: #007bff;
-      color: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      outline: none;
+      transition: border 0.2s;
+    }
+    input:focus {
+      border-color: var(--primary);
+    }
+
+    button.primary {
+      width: 100%;
+      padding: 0.8rem;
+      background: var(--primary);
       border: none;
-      border-radius: 4px;
+      border-radius: var(--radius);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 1rem;
+    }
+    button.primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      margin: 1.5rem 0;
+      color: var(--text-light);
+      font-size: 0.9rem;
+    }
+    .divider::before, .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: #e5e7eb;
+      margin: 0 0.75rem;
+    }
+
+    .social-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .social-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.7rem;
+      border-radius: var(--radius);
+      border: 1px solid #d1d5db;
+      background: white;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-weight: 500;
+    }
+    .social-btn:hover {
+      background: #f9fafb;
+    }
+    .social-btn img {
+      width: 20px;
+      height: 20px;
+      margin-right: 0.6rem;
+    }
+
+    .toggle-link {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: var(--primary);
       cursor: pointer;
     }
-    button:hover { background: #0056b3; }
-    #result { margin-top: 1rem; text-align: center; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>Schedule Email</h1>
-    <form id="form">
-      <label for="to">Recipient Email:</label>
-      <input type="email" id="to" name="to" required>
+    <h1>Email Scheduler</h1>
+    <p class="subtitle" id="formTitle">Login to access your dashboard</p>
 
-      <label for="subject">Subject:</label>
-      <input type="text" id="subject" name="subject" required>
-
-      <label for="message">Message:</label>
-      <textarea id="message" name="message" rows="4" required></textarea>
-
-      <label for="scheduleTime">Schedule Time:</label>
-      <input type="datetime-local" id="scheduleTime" name="scheduleTime" required>
-
-      <button type="submit">Schedule</button>
+    <!-- Login/Register form -->
+    <form id="authForm">
+      <div class="form-group">
+        <input type="email" name="email" placeholder="Email address" required>
+      </div>
+      <div class="form-group">
+        <input type="password" name="password" placeholder="Password" required>
+      </div>
+      <button type="submit" class="primary" id="submitBtn">Login</button>
     </form>
-    <p id="result"></p>
+
+    <div class="divider">OR</div>
+
+    <!-- Social Logins -->
+    <div class="social-buttons">
+      <a href="http://your-server.com/auth/google" class="social-btn">
+        <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/google.svg" alt="Google"> Continue with Google
+      </a>
+      <a href="http://your-server.com/auth/facebook" class="social-btn">
+        <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/facebook.svg" alt="Facebook"> Continue with Facebook
+      </a>
+      <a href="http://your-server.com/auth/apple" class="social-btn">
+        <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/apple.svg" alt="Apple"> Continue with Apple
+      </a>
+    </div>
+
+    <div class="toggle-link" id="toggleForm">Don't have an account? Register</div>
   </div>
 
   <script>
-    const form = document.getElementById("form");
-    form.addEventListener("submit", async (e) => {
+    const authForm = document.getElementById("authForm");
+    const toggleLink = document.getElementById("toggleForm");
+    const formTitle = document.getElementById("formTitle");
+    const submitBtn = document.getElementById("submitBtn");
+
+    let isLogin = true;
+
+    // Toggle Login/Register
+    toggleLink.addEventListener("click", () => {
+      isLogin = !isLogin;
+      if (isLogin) {
+        formTitle.textContent = "Login to access your dashboard";
+        submitBtn.textContent = "Login";
+        toggleLink.textContent = "Don't have an account? Register";
+      } else {
+        formTitle.textContent = "Register a new account";
+        submitBtn.textContent = "Register";
+        toggleLink.textContent = "Already have an account? Login";
+      }
+    });
+
+    // Handle form submit
+    authForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const data = {
-        to: form.to.value,
-        subject: form.subject.value,
-        message: form.message.value,
-        scheduleTime: form.scheduleTime.value
-      };
+      const data = Object.fromEntries(new FormData(authForm).entries());
+      const endpoint = isLogin ? "/auth/login" : "/auth/register";
 
       try {
-        const res = await fetch("/schedule", {
+        const res = await fetch("http://your-server.com" + endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data)
+          body: JSON.stringify(data),
+          credentials: "include"
         });
-        const text = await res.text();
-        document.getElementById("result").innerText = text;
+        const result = await res.json();
+
+        if (result.success) {
+          window.location.href = "dashboard.html";
+        } else {
+          alert(result.message || "❌ Authentication failed");
+        }
       } catch (err) {
-        document.getElementById("result").innerText = "❌ Error scheduling email.";
+        alert("⚠️ Unable to connect to server");
       }
     });
   </script>

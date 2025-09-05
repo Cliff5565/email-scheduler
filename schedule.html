@@ -1,64 +1,148 @@
-<!DOCTYPE html><html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://puc.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;">
+<!DOCTYPE html>
+<html lang="en">
+<head>
   <meta charset="UTF-8">
+  <title>Email Scheduler Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Email Scheduler</title>
+
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 0; padding: 20px;
-      background: #f9f9f9;
+      background: #f3f4f6;
     }
     .container {
-      max-width: 500px; margin: auto;
+      max-width: 900px; margin: auto;
       background: white; padding: 20px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      border-radius: 8px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+      border-radius: 10px;
+    }
+    h1, h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    textarea, .full {
+      grid-column: span 2;
     }
     input, textarea, button {
-      width: 100%; margin-top: 10px;
-      padding: 10px; border: 1px solid #ccc;
-      border-radius: 5px; font-size: 16px;
+      width: 100%; padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 15px;
     }
     button {
-      background: #4CAF50; color: white;
+      background: #4f46e5; color: white;
       border: none; cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
     }
     button:hover {
-      background: #45a049;
+      background: #3730a3;
     }
+    #stats {
+      margin-bottom: 20px;
+      text-align: center;
+      font-weight: bold;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 10px; border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+    th {
+      background: #f9fafb;
+    }
+    tr:hover {
+      background: #f3f4f6;
+    }
+    .status-scheduled { color: orange; }
+    .status-sent { color: green; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>Schedule an Email</h2>
-    <form id="emailForm">
-      <input type="email" id="to" placeholder="Recipient Email" required="">
-      <input type="text" id="subject" placeholder="Subject" required="">
-      <textarea id="text" placeholder="Message" rows="5" required=""></textarea>
-      <input type="datetime-local" id="dateTime" required="">
-      <button type="submit">Schedule Email</button>
+    <h1>Email Scheduler Dashboard</h1>
+
+    <!-- Schedule Form -->
+    <h2>Schedule a New Email</h2>
+    <form id="emailForm" enctype="multipart/form-data">
+      <input type="email" id="to" name="to" placeholder="Recipient Email" required>
+      <input type="text" id="subject" name="subject" placeholder="Subject" required>
+      <textarea id="text" name="message" placeholder="Message" rows="5" class="full" required></textarea>
+      <input type="datetime-local" id="dateTime" name="scheduleTime" required>
+      <input type="file" id="attachment" name="attachment" class="full">
+      <button type="submit" class="full">Schedule Email</button>
     </form>
-    <p id="response"></p>
+
+    <!-- Stats -->
+    <div id="stats">📊 Total Scheduled Emails: <span id="count">0</span></div>
+
+    <!-- Emails Table -->
+    <table>
+      <thead>
+        <tr>
+          <th>Recipient</th>
+          <th>Subject</th>
+          <th>Scheduled Time</th>
+          <th>Status</th>
+          <th>Attachment</th>
+        </tr>
+      </thead>
+      <tbody id="emailList"></tbody>
+    </table>
   </div>
 
   <script>
-    document.getElementById("emailForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const to = document.getElementById("to").value;
-      const subject = document.getElementById("subject").value;
-      const text = document.getElementById("text").value;
-      const dateTime = document.getElementById("dateTime").value;
+    const API_URL = "http://localhost:3000"; // change to your backend host
 
-      const res = await fetch("http://localhost:3000/schedule-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to, subject, text, dateTime })
+    async function loadSchedules() {
+      const res = await fetch(API_URL + "/schedules", { credentials: "include" });
+      const data = await res.json();
+
+      const emailList = document.getElementById("emailList");
+      emailList.innerHTML = "";
+      data.forEach(email => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${email.to}</td>
+          <td>${email.subject}</td>
+          <td>${new Date(email.dateTime).toLocaleString()}</td>
+          <td class="status-${email.status.toLowerCase()}">${email.status}</td>
+          <td>${email.attachment ? `<a href="${API_URL}/uploads/${email.attachment}" target="_blank">View</a>` : "-"}</td>
+        `;
+        emailList.appendChild(row);
       });
 
-      const data = await res.json();
-      document.getElementById("response").innerText = data.message;
+      document.getElementById("count").innerText = data.length;
+    }
+
+    document.getElementById("emailForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(e.target);
+
+      const res = await fetch(API_URL + "/schedule", {
+        method: "POST",
+        body: formData,
+        credentials: "include"
+      });
+
+      const result = await res.text();
+      alert(result);
+      loadSchedules(); // refresh table
     });
+
+    loadSchedules();
   </script>
-
-
-</body></html>
+</body>
+</html>

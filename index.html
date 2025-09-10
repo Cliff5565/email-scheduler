@@ -1,174 +1,74 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Email Scheduler Login</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Scheduler</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f9fafc;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
+      margin: 0; padding: 20px;
+      background: #f9f9f9;
     }
-    .login-box {
-      background: white;
-      border-radius: 12px;
-      padding: 30px;
-      max-width: 400px;
-      width: 100%;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      text-align: center;
+    .container {
+      max-width: 500px; margin: auto;
+      background: white; padding: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      border-radius: 8px;
     }
-    .login-box h2 {
-      margin-bottom: 10px;
+    input, textarea, button {
+      width: 100%; margin-top: 10px;
+      padding: 10px; border: 1px solid #ccc;
+      border-radius: 5px; font-size: 16px;
     }
-    .input {
-      width: 100%;
-      margin-bottom: 15px;
-      padding: 12px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 14px;
+    button {
+      background: #4CAF50; color: white;
+      border: none; cursor: pointer;
     }
-    .btn {
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 6px;
-      font-size: 15px;
+    button:hover {
+      background: #45a049;
+    }
+    #response {
+      margin-top: 15px;
       font-weight: bold;
-      cursor: pointer;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-    .btn-primary { background: #4a4aff; color: white; }
-    .btn-google { background: white; border: 1px solid #ccc; }
-    .btn-facebook { background: #1877f2; color: white; }
-    .btn-apple { background: black; color: white; }
-    .icon {
-      width: 18px;
-      height: 18px;
-      display: inline-block;
-    }
-    small { display: block; margin-top: 15px; }
-    a {
-      color: #4a4aff; 
-      cursor: pointer;
-      text-decoration: none;
     }
   </style>
 </head>
 <body>
-  <div class="login-box">
-    <h2>Email Scheduler</h2>
-    <p id="formTitle">Login to access your dashboard</p>
-
-    <input type="email" id="email" class="input" placeholder="Email address" />
-    <input type="password" id="password" class="input" placeholder="Password" />
-    <button class="btn btn-primary" onclick="handleSubmit()" id="submitBtn">Login</button>
-
-    <small>
-      <span id="toggleText">Don’t have an account?</span> 
-      <a onclick="toggleForm()" id="toggleLink">Register</a>
-    </small>
-
-    <hr/>
-    <!-- Google -->
-    <button class="btn btn-google" onclick="loginGoogle()">Continue with Google</button>
-    <!-- Facebook -->
-    <button class="btn btn-facebook" onclick="loginFacebook()">Continue with Facebook</button>
-    <!-- Apple -->
-    <button class="btn btn-apple" onclick="loginApple()">Continue with Apple</button>
-
-    <small id="status"></small>
+  <div class="container">
+    <h2>Schedule an Email</h2>
+    <form id="emailForm">
+      <input type="email" id="to" placeholder="Recipient Email" required>
+      <input type="text" id="subject" placeholder="Subject" required>
+      <textarea id="text" placeholder="Message" rows="5" required></textarea>
+      <input type="datetime-local" id="dateTime" required>
+      <button type="submit">Schedule Email</button>
+    </form>
+    <p id="response"></p>
   </div>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
-
   <script>
-    // ✅ Your actual Firebase config for "email-scheduler-61500"
-    const firebaseConfig = {
-      apiKey: "AIzaSyBglnXPAFyopb8nxgLcBQOSa9kO1nmGBK0",
-      authDomain: "email-scheduler-61500.firebaseapp.com",
-      projectId: "email-scheduler-61500",
-      storageBucket: "email-scheduler-61500.appspot.com",
-      messagingSenderId: "600161310662",
-      appId: "`600161310662" // ← 這個在 Firebase Console 的 SDK 設定裡找到
-    };
+    document.getElementById("emailForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const to = document.getElementById("to").value;
+      const subject = document.getElementById("subject").value;
+      const text = document.getElementById("text").value;
+      const dateTime = document.getElementById("dateTime").value;
 
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-
-    let isRegister = false;
-
-    function toggleForm() {
-      isRegister = !isRegister;
-      document.getElementById("formTitle").innerText = isRegister 
-        ? "Create your account" 
-        : "Login to access your dashboard";
-      document.getElementById("submitBtn").innerText = isRegister ? "Register" : "Login";
-      document.getElementById("toggleText").innerText = isRegister
-        ? "Already have an account?"
-        : "Don’t have an account?";
-      document.getElementById("toggleLink").innerText = isRegister ? "Login" : "Register";
-      document.getElementById("status").innerText = "";
-    }
-
-    async function handleSubmit() {
-      const email = document.getElementById("email").value;
-      const pass = document.getElementById("password").value;
       try {
-        let userCred;
-        if (isRegister) {
-          userCred = await auth.createUserWithEmailAndPassword(email, pass);
-          document.getElementById("status").innerText = "Registered as " + userCred.user.email;
-        } else {
-          userCred = await auth.signInWithEmailAndPassword(email, pass);
-          document.getElementById("status").innerText = "Logged in as " + userCred.user.email;
-        }
-      } catch (err) {
-        document.getElementById("status").innerText = err.message;
-      }
-    }
+        const res = await fetch("http://localhost:3000/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to, subject, text, dateTime })
+        });
 
-    async function loginGoogle() {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      try {
-        const result = await auth.signInWithPopup(provider);
-        document.getElementById("status").innerText = "Google login: " + result.user.displayName;
+        const data = await res.json();
+        document.getElementById("response").innerText = data.message;
       } catch (err) {
-        document.getElementById("status").innerText = err.message;
+        document.getElementById("response").innerText = "⚠️ Error scheduling email";
       }
-    }
-
-    async function loginFacebook() {
-      const provider = new firebase.auth.FacebookAuthProvider();
-      try {
-        const result = await auth.signInWithPopup(provider);
-        document.getElementById("status").innerText = "Facebook login: " + result.user.displayName;
-      } catch (err) {
-        document.getElementById("status").innerText = err.message;
-      }
-    }
-
-    async function loginApple() {
-      const provider = new firebase.auth.OAuthProvider("apple.com");
-      try {
-        const result = await auth.signInWithPopup(provider);
-        document.getElementById("status").innerText = "Apple login: " + result.user.displayName;
-      } catch (err) {
-        document.getElementById("status").innerText = err.message;
-      }
-    }
+    });
   </script>
 </body>
 </html>

@@ -43,7 +43,7 @@ app.post("/schedule", (req, res) => {
   const day = runAt.getDate();
   const month = runAt.getMonth() + 1;
 const cronExp = `${minute} ${hour} ${day} ${month} *`;
-  console.log(📅 Scheduling email to ${to} at ${runAt} with cron: ${cronExp});
+  console.log('📅 Scheduling email to ${to} at ${runAt} with cron: ${cronExp}');
 
   // Schedule task
   cron.schedule(cronExp, async () => {

@@ -10,8 +10,8 @@ const app = express();
 const port = process.env.PORT || 10000;
 
 // Helpers to serve HTML files
-const __filename = fileURLToPath(import.meta.url);
-const _dirname = path.dirname(__filename);
+const filename = fileURLToPath(import.meta.url);
+const dirname = path.dirname(filename);
 
 // Middleware
 app.use(express.json());

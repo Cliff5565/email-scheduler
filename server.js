@@ -55,7 +55,7 @@ const cronExp = `${minute} ${hour} ${day} ${month} *`;
     }
   });
 
-  res.send(✅ Email scheduled for ${runAt.toString()});
+  res.send(`✅ Email scheduled for ${runAt.toString()}`);
 });
 
 // Nodemailer transport

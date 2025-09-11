@@ -18,7 +18,7 @@ app.use(express.static(dirname)); // serve static files like schedule.html
 
 // Root route
 app.get("/", (req, res) => {
-  res.send("🚀 Email Scheduler backend is running!");
+  res.sendFile(path.join(dirname, "schedule.html")); // Serve schedule.html
 });
 
 // POST /schedule

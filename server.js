@@ -1,5 +1,3 @@
-// Use ES Module syntax; ensure package.json has "type": "module"
-
 import express from "express";
 import nodemailer from "nodemailer";
 import cron from "node-cron";
@@ -16,14 +14,14 @@ const dirname = path.dirname(filename);
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // for <form> submissions
-app.use(express.static(_dirname)); // serve static files like schedule.html
+app.use(express.static(dirname)); // serve static files like schedule.html
 
 // Root route
 app.get("/", (req, res) => {
   res.send("🚀 Email Scheduler backend is running!");
 });
 
-// POST /schedule (works with fetch JSON or <form>)
+// POST /schedule
 app.post("/schedule", (req, res) => {
   const { to, subject, message, scheduleTime } = req.body;
 

@@ -7,42 +7,36 @@ import { fileURLToPath } from "url";
 const app = express();
 const port = process.env.PORT || 10000;
 
-// Helpers to serve HTML files
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 
-// Middleware
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // for <form> submissions
-app.use(express.static(dirname)); // serve static files like schedule.html
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(dirname));
 
-// Root route
 app.get("/", (req, res) => {
-  res.sendFile(path.join(dirname, "schedule.html")); // Serve schedule.html
+  res.sendFile(path.join(dirname, "schedule.html"));
 });
 
-// POST /schedule
 app.post("/schedule", (req, res) => {
   const { to, subject, message, scheduleTime } = req.body;
 
   if (!to || !subject || !message || !scheduleTime) {
-    return res.status(400).send("❌ Missing required fields");
+    return res.status(400).json({ error: "❌ Missing required fields" });
   }
 
   const runAt = new Date(scheduleTime);
   if (isNaN(runAt.getTime())) {
-    return res.status(400).send("❌ Invalid date/time format");
+    return res.status(400).json({ error: "❌ Invalid date/time format" });
   }
 
-  // Build cron expression
   const minute = runAt.getMinutes();
   const hour = runAt.getHours();
   const day = runAt.getDate();
-  const month = runAt.getMonth() + 1; // Months are 0-based
+  const month = runAt.getMonth() + 1;
   const cronExp = `${minute} ${hour} ${day} ${month} *`;
-  console.log(`📅 Scheduling email to ${to} at ${runAt} with cron: ${cronExp}`);
+  console.log(`📅 Scheduling ${to} at ${runAt} (${cronExp})`);
 
-  // Schedule task
   cron.schedule(cronExp, async () => {
     try {
       await sendEmail(to, subject, message);
@@ -52,16 +46,15 @@ app.post("/schedule", (req, res) => {
     }
   });
 
-  res.send(`✅ Email scheduled for ${runAt.toString()}`);
+  res.json({ message: `✅ Email scheduled for ${runAt.toString()}` });
 });
 
-// Nodemailer transport
 async function sendEmail(to, subject, text) {
-  let transporter = nodemailer.createTransport({
+  const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.EMAIL_USER, // set in Render
-      pass: process.env.EMAIL_PASS  // set in Render
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
     },
   });
 
@@ -73,7 +66,6 @@ async function sendEmail(to, subject, text) {
   });
 }
 
-// Start server
 app.listen(port, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${port}`);
 });

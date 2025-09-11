@@ -1,4 +1,3 @@
-// server.js
 // Use ES Module syntax; ensure package.json has "type": "module"
 
 import express from "express";
@@ -12,12 +11,12 @@ const port = process.env.PORT || 10000;
 
 // Helpers to serve HTML files
 const __filename = fileURLToPath(import.meta.url);
-const _dirname = path.dirname(_filename);
+const _dirname = path.dirname(__filename);
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // for <form> submissions
-app.use(express.static(__dirname)); // serve static files like schedule.html
+app.use(express.static(_dirname)); // serve static files like schedule.html
 
 // Root route
 app.get("/", (req, res) => {
@@ -41,8 +40,8 @@ app.post("/schedule", (req, res) => {
   const minute = runAt.getMinutes();
   const hour = runAt.getHours();
   const day = runAt.getDate();
-  const month = runAt.getMonth() + 1;
-const cronExp = `${minute} ${hour} ${day} ${month} *`;
+  const month = runAt.getMonth() + 1; // Months are 0-based
+  const cronExp = `${minute} ${hour} ${day} ${month} *`;
   console.log(`📅 Scheduling email to ${to} at ${runAt} with cron: ${cronExp}`);
 
   // Schedule task

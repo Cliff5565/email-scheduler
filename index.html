@@ -1,61 +1,73 @@
-<script>
-  const apiBase = "https://email-scheduler-7fxr.onrender.com";
-
-  const typeSelect = document.getElementById("type");
-  const emailForm = document.getElementById("emailForm");
-  const smsForm = document.getElementById("smsForm");
-  const responseEl = document.getElementById("response");
-
-  // Toggle forms based on type
-  typeSelect.addEventListener("change", () => {
-    if (typeSelect.value === "email") {
-      emailForm.classList.remove("hidden");
-      smsForm.classList.add("hidden");
-    } else {
-      emailForm.classList.add("hidden");
-      smsForm.classList.remove("hidden");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Scheduler</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 20px;
+      background: #f9f9f9;
     }
-    responseEl.innerText = "";
-  });
-
-  // Email form submit
-  emailForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const to = document.getElementById("emailTo").value;
-    const subject = document.getElementById("emailSubject").value;
-    const text = document.getElementById("emailText").value;
-    const dateTime = document.getElementById("emailDateTime").value;
-
-    try {
-      const res = await fetch(`${apiBase}/schedule`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to, subject, message: text, scheduleTime: dateTime })
-      });
-      const data = await res.json();
-      responseEl.innerText = data.message || data.error;
-    } catch (err) {
-      responseEl.innerText = "❌ Failed to schedule email";
+    .container {
+      max-width: 500px; margin: auto;
+      background: white; padding: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      border-radius: 8px;
     }
-  });
-
-  // SMS form submit
-  smsForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const to = document.getElementById("smsTo").value;
-    const message = document.getElementById("smsMessage").value;
-    const dateTime = document.getElementById("smsDateTime").value;
-
-    try {
-      const res = await fetch(`${apiBase}/schedule`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to, message, scheduleTime: dateTime })
-      });
-      const data = await res.json();
-      responseEl.innerText = data.message || data.error;
-    } catch (err) {
-      responseEl.innerText = "❌ Failed to schedule SMS";
+    input, textarea, button {
+      width: 100%; margin-top: 10px;
+      padding: 10px; border: 1px solid #ccc;
+      border-radius: 5px; font-size: 16px;
     }
-  });
-</script>
+    button {
+      background: #4CAF50; color: white;
+      border: none; cursor: pointer;
+    }
+    button:hover {
+      background: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Schedule Email</h2>
+    <form id="emailForm">
+      <input type="email" id="emailTo" placeholder="Recipient Email" required>
+      <input type="text" id="emailSubject" placeholder="Subject" required>
+      <textarea id="emailText" placeholder="Message" rows="5" required></textarea>
+      <input type="datetime-local" id="emailDateTime" required>
+      <button type="submit">Schedule Email</button>
+    </form>
+    <p id="response"></p>
+  </div>
+
+  <script>
+    const apiBase = "http://localhost:10000"; // Change to your deployed URL in production
+
+    const emailForm = document.getElementById("emailForm");
+    const responseEl = document.getElementById("response");
+
+    emailForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const to = document.getElementById("emailTo").value;
+      const subject = document.getElementById("emailSubject").value;
+      const text = document.getElementById("emailText").value;
+      const dateTime = document.getElementById("emailDateTime").value;
+
+      try {
+        const res = await fetch(`${apiBase}/schedule`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to, subject, message: text, scheduleTime: dateTime })
+        });
+        const data = await res.json();
+        responseEl.innerText = data.message || data.error;
+      } catch (err) {
+        responseEl.innerText = "❌ Failed to schedule email";
+      }
+    });
+  </script>
+</body>
+</html>

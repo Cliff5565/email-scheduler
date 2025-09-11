@@ -2,147 +2,105 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Email Scheduler Dashboard</title>
+  <title>Email Scheduler</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 0; padding: 20px;
-      background: #f3f4f6;
+      max-width: 500px;
+      margin: 40px auto;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fafafa;
     }
-    .container {
-      max-width: 900px; margin: auto;
-      background: white; padding: 20px;
-      box-shadow: 0 0 15px rgba(0,0,0,0.1);
-      border-radius: 10px;
-    }
-    h1, h2 {
+    h1 {
       text-align: center;
-      margin-bottom: 20px;
       color: #333;
     }
-    form {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 15px;
-      margin-bottom: 30px;
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: bold;
     }
-    textarea, .full {
-      grid-column: span 2;
-    }
-    input, textarea, button {
-      width: 100%; padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 15px;
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      border: 1px solid #bbb;
+      border-radius: 4px;
     }
     button {
-      background: #4f46e5; color: white;
-      border: none; cursor: pointer;
-      font-weight: bold;
-      transition: background 0.2s;
+      margin-top: 20px;
+      padding: 10px;
+      width: 100%;
+      background-color: #0d6efd;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
     }
     button:hover {
-      background: #3730a3;
+      background-color: #0b5ed7;
     }
-    #stats {
-      margin-bottom: 20px;
-      text-align: center;
+    #result {
+      margin-top: 15px;
       font-weight: bold;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    th, td {
-      padding: 10px; border-bottom: 1px solid #ddd;
-      text-align: left;
-    }
-    th {
-      background: #f9fafb;
-    }
-    tr:hover {
-      background: #f3f4f6;
-    }
-    .status-scheduled { color: orange; }
-    .status-sent { color: green; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Email Scheduler Dashboard</h1>
+  <h1>Email Scheduler</h1>
 
-    <!-- Schedule Form -->
-    <h2>Schedule a New Email</h2>
-    <form id="emailForm" enctype="multipart/form-data">
-      <input type="email" id="to" name="to" placeholder="Recipient Email" required>
-      <input type="text" id="subject" name="subject" placeholder="Subject" required>
-      <textarea id="text" name="message" placeholder="Message" rows="5" class="full" required></textarea>
-      <input type="datetime-local" id="dateTime" name="scheduleTime" required>
-      <input type="file" id="attachment" name="attachment" class="full">
-      <button type="submit" class="full">Schedule Email</button>
-    </form>
+  <form id="emailForm">
+    <label>
+      To:
+      <input type="email" name="to" required>
+    </label>
 
-    <!-- Stats -->
-    <div id="stats">📊 Total Scheduled Emails: <span id="count">0</span></div>
+    <label>
+      Subject:
+      <input type="text" name="subject" required>
+    </label>
 
-    <!-- Emails Table -->
-    <table>
-      <thead>
-        <tr>
-          <th>Recipient</th>
-          <th>Subject</th>
-          <th>Scheduled Time</th>
-          <th>Status</th>
-          <th>Attachment</th>
-        </tr>
-      </thead>
-      <tbody id="emailList"></tbody>
-    </table>
-  </div>
+    <label>
+      Message:
+      <textarea name="message" rows="5" required></textarea>
+    </label>
+
+    <label>
+      Schedule Time:
+      <input type="datetime-local" name="scheduleTime" required>
+    </label>
+
+    <button type="submit">Schedule Email</button>
+  </form>
+
+  <p id="result"></p>
 
   <script>
-    const API_URL = "http://localhost:3000"; // change to your backend host
+    const form = document.getElementById("emailForm");
+    const result = document.getElementById("result");
 
-    async function loadSchedules() {
-      const res = await fetch(API_URL + "/schedules", { credentials: "include" });
-      const data = await res.json();
-
-      const emailList = document.getElementById("emailList");
-      emailList.innerHTML = "";
-      data.forEach(email => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${email.to}</td>
-          <td>${email.subject}</td>
-          <td>${new Date(email.dateTime).toLocaleString()}</td>
-          <td class="status-${email.status.toLowerCase()}">${email.status}</td>
-          <td>${email.attachment ? `<a href="${API_URL}/uploads/${email.attachment}" target="_blank">View</a>` : "-"}</td>
-        `;
-        emailList.appendChild(row);
-      });
-
-      document.getElementById("count").innerText = data.length;
-    }
-
-    document.getElementById("emailForm").addEventListener("submit", async (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      const formData = new FormData(e.target);
-
-      const res = await fetch(API_URL + "/schedule", {
-        method: "POST",
-        body: formData,
-        credentials: "include"
-      });
-
-      const result = await res.text();
-      alert(result);
-      loadSchedules(); // refresh table
+      const data = Object.fromEntries(new FormData(form).entries());
+      try {
+        const res = await fetch("/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        const msg = await res.text();
+        result.textContent = msg;
+        result.style.color = res.ok ? "green" : "red";
+      } catch (err) {
+        result.textContent = "❌ Failed to contact server";
+        result.style.color = "red";
+      }
     });
-
-    loadSchedules();
   </script>
 </body>
 </html>

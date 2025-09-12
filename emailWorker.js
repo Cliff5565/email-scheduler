@@ -1,24 +1,27 @@
 // workers/emailWorker.js
-import nodemailer from "nodemailer";
 import { Worker } from "bullmq";
-import mongoose from "mongoose";
-import Email from "../models/Email.js";
+import { transporter } from "../server.js";
 
-mongoose.connect(process.env.MONGO_URI);
-
-const worker = new Worker("emails", async job => {
-  const { to, subject, message, emailId } = job.data;
-
-  let transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+const worker = new Worker(
+  "emails",
+  async (job) => {
+    const { to, subject, body } = job.data;
+    await transporter.sendMail({
+      from: process.env.SMTP_USER,
+      to,
+      subject,
+      text: body,
+    });
+    console.log(`✅ Email sent to ${to}`);
+  },
+  {
+    connection: {
+      host: process.env.REDIS_HOST || "127.0.0.1",
+      port: process.env.REDIS_PORT || 6379,
     },
-  });
+  }
+);
 
-  await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text: message });
-
-  await Email.findByIdAndUpdate(emailId, { status: "SENT", sentAt: new Date() });
-  console.log(`✅ Email sent to ${to}`);
+worker.on("failed", (job, err) => {
+  console.error(`❌ Job ${job.id} failed:`, err);
 });

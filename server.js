@@ -6,7 +6,6 @@ import mongoose from "mongoose";
 import { Queue } from "bullmq";
 import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
-import { createClient } from "redis";
 
 dotenv.config();
 
@@ -19,25 +18,24 @@ const PORT = process.env.PORT || 10000;
 
 // ---------- Database ----------
 mongoose
-  .connect(process.env.MONGO_URI || "mongodb://localhost:27017/email_scheduler")
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB error:", err));
 
 // ---------- Redis ----------
-const redisConnection = {
-  connection: {
-    host: process.env.REDIS_HOST || "127.0.0.1",
-    port: process.env.REDIS_PORT || 6379,
-  },
+const redisOptions = {
+  host: process.env.REDIS_HOST || "127.0.0.1",
+  port: process.env.REDIS_PORT || 6379,
+  password: process.env.REDIS_PASSWORD || undefined,
 };
 
-const emailQueue = new Queue("emails", redisConnection);
+const emailQueue = new Queue("emails", { connection: redisOptions });
 
 // ---------- Middleware ----------
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---------- Serve static files ----------
+// ---------- Serve static ----------
 app.use(express.static(__dirname));
 
 // ---------- Models ----------
@@ -48,32 +46,23 @@ const EmailJobSchema = new mongoose.Schema({
   datetime: Date,
   status: { type: String, default: "scheduled" },
 });
-
 const EmailJob = mongoose.model("EmailJob", EmailJobSchema);
 
 // ---------- Routes ----------
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
-app.get("/schedule", (req, res) => {
-  res.sendFile(path.join(__dirname, "schedule.html"));
-});
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+app.get("/schedule", (req, res) => res.sendFile(path.join(__dirname, "schedule.html")));
 
 app.post("/schedule", async (req, res) => {
   const { to, subject, body, datetime } = req.body;
   try {
-    // Store job in DB
     const job = await EmailJob.create({ to, subject, body, datetime });
 
-    // Push into Redis queue
     await emailQueue.add(
       "sendEmail",
       { to, subject, body },
       { delay: new Date(datetime).getTime() - Date.now() }
     );
 
-    console.log(`📅 Scheduled email to ${to} at ${datetime}`);
     res.send(`✅ Email scheduled for ${datetime}`);
   } catch (err) {
     console.error(err);
@@ -81,18 +70,18 @@ app.post("/schedule", async (req, res) => {
   }
 });
 
-// ---------- Nodemailer transport ----------
+// ---------- Nodemailer Transport ----------
 export const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
   port: process.env.SMTP_PORT || 587,
   secure: false,
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 });
 
-// ---------- Start server ----------
+// ---------- Start ----------
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });

@@ -22,7 +22,7 @@ mongoose
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB error:", err));
 
-// ---------- Redis & BullMQ Queue ----------
+// ---------- Redis Setup ----------
 let emailQueue = null;
 
 if (process.env.REDIS_URL) {
@@ -31,12 +31,15 @@ if (process.env.REDIS_URL) {
       tls: process.env.REDIS_URL.startsWith("rediss://") ? {} : undefined,
     });
 
-    // Test Redis connection
+    // 👇 CRITICAL: Test connection before proceeding
     await redisClient.ping();
+    console.log("✅ Redis ping successful!");
+
     emailQueue = new Queue("emails", { connection: redisClient });
     console.log("✅ Connected to Redis and BullMQ queue ready");
   } catch (err) {
     console.error("❌ Failed to connect to Redis:", err.message);
+    console.error("❌ Make sure REDIS_URL is set in Render Environment Variables.");
   }
 } else {
   console.warn("⚠️ No REDIS_URL set. Email scheduling via BullMQ is disabled.");
@@ -70,24 +73,32 @@ const EmailJobSchema = new mongoose.Schema({
 });
 const EmailJob = mongoose.model("EmailJob", EmailJobSchema);
 
-// ---------- Worker: Process queued emails ----------
+// ---------- Worker: Process queued emails (runs inside server.js) ----------
 if (emailQueue) {
-  console.log("🔍 emailQueue is available. Starting BullMQ worker...");
+  console.log("🔍 Starting BullMQ worker...");
 
   emailQueue.on("failed", async (job, err) => {
     console.error(`❌ Job ${job.id} failed:`, err.message);
-    await EmailJob.findByIdAndUpdate(job.id, {
-      status: "failed",
-      error: err.message,
-    });
+    try {
+      await EmailJob.findByIdAndUpdate(job.id, {
+        status: "failed",
+        error: err.message,
+      });
+    } catch (dbErr) {
+      console.error("❌ Failed to update job status in DB after failure:", dbErr.message);
+    }
   });
 
   emailQueue.on("completed", async (job, result) => {
     console.log(`✅ Job ${job.id} completed:`, result);
-    await EmailJob.findByIdAndUpdate(job.id, {
-      status: "sent",
-      sentAt: new Date(),
-    });
+    try {
+      await EmailJob.findByIdAndUpdate(job.id, {
+        status: "sent",
+        sentAt: new Date(),
+      });
+    } catch (dbErr) {
+      console.error("❌ Failed to update job status in DB after success:", dbErr.message);
+    }
   });
 
   const worker = new Worker(
@@ -105,11 +116,24 @@ if (emailQueue) {
 
       return { messageId: info.messageId };
     },
-    { connection: emailQueue.connection }
+    {
+      connection: emailQueue.connection, // ✅ Use the real Redis client
+      concurrency: 5,
+      removeOnComplete: true,
+      removeOnFail: false,
+    }
   );
 
   worker.on("error", (err) => {
     console.error("🔴 Worker error:", err);
+  });
+
+  worker.on("ready", () => {
+    console.log("🟢 BullMQ worker is now listening for jobs.");
+  });
+
+  worker.on("drained", () => {
+    console.log("📦 All jobs processed — worker idle");
   });
 
   console.log("✅ BullMQ worker started inside server.js");
@@ -205,4 +229,10 @@ app.post("/schedule", async (req, res) => {
 // ---------- Start Server ----------
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("\n🛑 Shutting down server...");
+  process.exit(0);
 });

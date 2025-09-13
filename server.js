@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import { Queue, Worker } from "bullmq"; // 👈 FIXED: Added Worker here
+import { Queue, Worker } from "bullmq";
 import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import IORedis from "ioredis";
@@ -30,6 +30,9 @@ if (process.env.REDIS_URL) {
     const redisClient = new IORedis(process.env.REDIS_URL, {
       tls: process.env.REDIS_URL.startsWith("rediss://") ? {} : undefined,
     });
+
+    // Test Redis connection
+    await redisClient.ping();
     emailQueue = new Queue("emails", { connection: redisClient });
     console.log("✅ Connected to Redis and BullMQ queue ready");
   } catch (err) {
@@ -67,8 +70,10 @@ const EmailJobSchema = new mongoose.Schema({
 });
 const EmailJob = mongoose.model("EmailJob", EmailJobSchema);
 
-// ---------- Worker: Process queued emails (inside server.js) ----------
+// ---------- Worker: Process queued emails ----------
 if (emailQueue) {
+  console.log("🔍 emailQueue is available. Starting BullMQ worker...");
+
   emailQueue.on("failed", async (job, err) => {
     console.error(`❌ Job ${job.id} failed:`, err.message);
     await EmailJob.findByIdAndUpdate(job.id, {
@@ -85,7 +90,6 @@ if (emailQueue) {
     });
   });
 
-  // ✅ WORKER IS NOW DEFINED BECAUSE WE IMPORTED IT
   const worker = new Worker(
     "emails",
     async (job) => {
@@ -109,6 +113,8 @@ if (emailQueue) {
   });
 
   console.log("✅ BullMQ worker started inside server.js");
+} else {
+  console.warn("⚠️ Not starting BullMQ worker: Redis connection not available.");
 }
 
 // ---------- Routes ----------

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Scheduler Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 40px; text-align: center; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>🎉 Welcome to Your Email Scheduler Dashboard!</h1>
+  <p>You're logged in as: <strong id="userEmail"></strong></p>
+
+  <button onclick="logout()">Logout</button>
+
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAcNhqW9wkLs3S7O5bp4GMJ0SWJ4d-7GRo",
+      authDomain: "email-scheduler-80501.firebaseapp.com",
+      projectId: "email-scheduler-80501",
+      storageBucket: "email-scheduler-80501.firebasestorage.app",
+      messagingSenderId: "357118084169",
+      appId: "1:357118084169:web:1140c0a3f67f0e9bdfeb98",
+      measurementId: "G-96971SLQXH"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+
+    const auth = firebase.auth();
+
+    // Show current user email
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        document.getElementById("userEmail").textContent = user.email;
+      } else {
+        window.location.href = "/"; // Redirect to login if not authenticated
+      }
+    });
+
+    async function logout() {
+      await auth.signOut();
+      window.location.href = "/";
+    }
+  </script>
+</body>
+</html>

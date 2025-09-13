@@ -43,7 +43,7 @@ if (process.env.REDIS_URL) {
 export const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
   port: process.env.SMTP_PORT || 587,
-  secure: false, // true for 465, false for other ports
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -53,7 +53,7 @@ export const transporter = nodemailer.createTransport({
 // ---------- Middleware ----------
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(__dirname)); // serve static files (HTML, CSS, JS)
+app.use(express.static(__dirname));
 
 // ---------- Models ----------
 const EmailJobSchema = new mongoose.Schema({
@@ -67,10 +67,7 @@ const EmailJobSchema = new mongoose.Schema({
 });
 const EmailJob = mongoose.model("EmailJob", EmailJobSchema);
 
-// ---------- Worker: Process queued emails (run this once!) ----------
-// ⚠️ IMPORTANT: This worker should run in a separate process or as a background task.
-// But for simplicity in single-server deployment, we'll start it here.
-// In production, use a dedicated worker script (e.g., worker.js).
+// ---------- Worker: Process queued emails (inside server.js) ----------
 if (emailQueue) {
   emailQueue.on("failed", async (job, err) => {
     console.error(`❌ Job ${job.id} failed:`, err.message);
@@ -88,12 +85,12 @@ if (emailQueue) {
     });
   });
 
-  // Define the worker logic
+  // ✅ WORKER IS NOW DEFINED BECAUSE WE IMPORTED IT
   const worker = new Worker(
     "emails",
     async (job) => {
       const { to, subject, body } = job.data;
-      console.log(`📧 Sending email to ${to}...`);
+      console.log(`📧 [Worker] Sending email to ${to}...`);
 
       const info = await transporter.sendMail({
         from: process.env.EMAIL_USER,
@@ -108,10 +105,10 @@ if (emailQueue) {
   );
 
   worker.on("error", (err) => {
-    console.error("❌ Worker error:", err);
+    console.error("🔴 Worker error:", err);
   });
 
-  console.log("✅ BullMQ worker started for 'emails' queue");
+  console.log("✅ BullMQ worker started inside server.js");
 }
 
 // ---------- Routes ----------
@@ -119,34 +116,54 @@ app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/schedule", (req, res) => res.sendFile(path.join(__dirname, "schedule.html")));
 
 app.post("/schedule", async (req, res) => {
-  const { to, subject, body, datetime } = req.body;
+  const { to, subject, body, datetime, timezone } = req.body;
 
-  if (!to || !subject || !body || !datetime) {
-    return res.status(400).json({ error: "❌ Missing required fields: to, subject, body, datetime" });
+  if (!to || !subject || !body || !datetime || !timezone) {
+    return res.status(400).json({
+      error: "❌ Missing required fields: to, subject, body, datetime, timezone",
+    });
   }
 
-  const scheduledTime = new Date(datetime);
-  if (isNaN(scheduledTime.getTime())) {
-    return res.status(400).json({ error: "❌ Invalid date/time format" });
+  if (!Intl.supportedValuesOf("timeZone").includes(timezone)) {
+    return res.status(400).json({ error: "❌ Invalid timezone" });
   }
 
+  let scheduledTime;
   try {
-    // Save to MongoDB for persistence and tracking
-    const emailJob = await EmailJob.create({ to, subject, body, datetime });
+    scheduledTime = new Date(datetime);
+    if (isNaN(scheduledTime.getTime())) {
+      return res.status(400).json({ error: "❌ Invalid date/time format" });
+    }
+
+    const now = Date.now();
+    const delayMs = scheduledTime.getTime() - now;
+
+    if (delayMs < 0) {
+      return res.status(400).json({
+        error: "❌ Cannot schedule email in the past.",
+      });
+    }
+
+    const emailJob = await EmailJob.create({
+      to,
+      subject,
+      body,
+      datetime: scheduledTime,
+      timezone,
+      status: "scheduled",
+    });
 
     if (emailQueue) {
-      // Add job to BullMQ with delay
       await emailQueue.add(
         "sendEmail",
         { to, subject, body },
         {
-          id: emailJob._id.toString(), // Use MongoDB ID as job ID for tracking
-          delay: scheduledTime.getTime() - Date.now(), // Delay in ms
+          id: emailJob._id.toString(),
+          delay: delayMs,
         }
       );
-      console.log(`📅 Scheduled email job ${emailJob._id} for ${scheduledTime}`);
+      console.log(`📅 Scheduled job ${emailJob._id} for ${scheduledTime.toLocaleString()} (${timezone})`);
     } else {
-      // Fallback: Send immediately if Redis is down
       console.warn("⚠️ Redis not available, sending email immediately...");
       try {
         await transporter.sendMail({
@@ -170,7 +187,7 @@ app.post("/schedule", async (req, res) => {
     }
 
     res.json({
-      message: `✅ Email scheduled for ${scheduledTime.toLocaleString()}`,
+      message: `✅ Email scheduled for ${scheduledTime.toLocaleString()} (${timezone})`,
       jobId: emailJob._id.toString(),
     });
   } catch (err) {

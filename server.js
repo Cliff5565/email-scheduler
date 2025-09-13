@@ -170,21 +170,35 @@ app.post("/schedule", async (req, res) => {
     return res.status(400).json({ error: "❌ Invalid timezone" });
   }
 
-  let scheduledTime;
-  try {
-    scheduledTime = new Date(datetime);
-    if (isNaN(scheduledTime.getTime())) {
-      return res.status(400).json({ error: "❌ Invalid date/time format" });
-    }
+/ Use node-timezone library to parse local time in user's timezone
+import { zonedTimeToUtc } from 'date-fns-tz';
 
-    const now = Date.now();
-    const delayMs = scheduledTime.getTime() - now;
+// ... inside your /schedule POST route ...
 
-    if (delayMs < 0) {
-      return res.status(400).json({
-        error: "❌ Cannot schedule email in the past.",
-      });
-    }
+const { to, subject, body, datetime, timezone } = req.body;
+
+if (!to || !subject || !body || !datetime || !timezone) {
+  return res.status(400).json({ error: "Missing required fields" });
+}
+
+if (!Intl.supportedValuesOf("timeZone").includes(timezone)) {
+  return res.status(400).json({ error: "Invalid timezone" });
+}
+
+// 👇 Convert LOCAL datetime string + timezone → UTC timestamp
+let scheduledTime;
+try {
+  scheduledTime = zonedTimeToUtc(datetime, timezone);
+} catch (err) {
+  return res.status(400).json({ error: "Invalid date/time format" });
+}
+
+const now = Date.now();
+const delayMs = scheduledTime.getTime() - now;
+
+if (delayMs < 0) {
+  return res.status(400).json({ error: "Cannot schedule email in the past." });
+}
 
     const emailJob = await EmailJob.create({
       to,

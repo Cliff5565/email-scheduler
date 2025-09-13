@@ -23,23 +23,35 @@ mongoose
   .catch((err) => console.error("❌ MongoDB error:", err));
 
 // ---------- Redis Setup ----------
+// ---------- Redis Setup ----------
 let emailQueue = null;
+let redisClient = null;
 
 if (process.env.REDIS_URL) {
   try {
-    const redisClient = new IORedis(process.env.REDIS_URL, {
+    redisClient = new IORedis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
       tls: process.env.REDIS_URL.startsWith("rediss://") ? {} : undefined,
     });
 
-    // 👇 CRITICAL: Test connection before proceeding
-    await redisClient.ping();
-    console.log("✅ Redis ping successful!");
+    redisClient.on('error', (err) => {
+      console.error('❌ Redis connection error:', err.message);
+    });
+
+    redisClient.on('connect', () => {
+      console.log('🟢 Connecting to Redis...');
+    });
+
+    redisClient.on('ready', () => {
+      console.log('✅ Redis connection established');
+    });
 
     emailQueue = new Queue("emails", { connection: redisClient });
-    console.log("✅ Connected to Redis and BullMQ queue ready");
+    console.log("✅ BullMQ queue initialized");
+    
   } catch (err) {
-    console.error("❌ Failed to connect to Redis:", err.message);
-    console.error("❌ Make sure REDIS_URL is set in Render Environment Variables.");
+    console.error("❌ Failed to initialize Redis:", err.message);
   }
 } else {
   console.warn("⚠️ No REDIS_URL set. Email scheduling via BullMQ is disabled.");

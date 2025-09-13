@@ -227,9 +227,19 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 
-
-
 const auth = firebase.auth();
+
+// 👇 ADD THIS RIGHT HERE — AFTER firebase.initializeApp()
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    console.log("✅ User signed in:", user.email);
+    window.location.href = "/schedule"; // Redirect automatically
+  } else {
+    console.log("❌ No user signed in");
+    document.getElementById("status").innerText = "";
+  }
+});
+
 
 let isRegister = false;
 

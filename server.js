@@ -23,7 +23,6 @@ mongoose
   .catch((err) => console.error("❌ MongoDB error:", err));
 
 // ---------- Redis Setup ----------
-// ---------- Redis Setup ----------
 let emailQueue = null;
 let redisClient = null;
 
@@ -49,7 +48,6 @@ if (process.env.REDIS_URL) {
 
     emailQueue = new Queue("emails", { connection: redisClient });
     console.log("✅ BullMQ queue initialized");
-    
   } catch (err) {
     console.error("❌ Failed to initialize Redis:", err.message);
   }
@@ -79,6 +77,8 @@ const EmailJobSchema = new mongoose.Schema({
   subject: String,
   body: String,
   datetime: Date,
+  originalLocalTime: String, // 👈 Store original local time for display
+  timezone: String,
   status: { type: String, default: "scheduled" },
   sentAt: Date,
   error: String,
@@ -129,7 +129,7 @@ if (emailQueue) {
       return { messageId: info.messageId };
     },
     {
-      connection: emailQueue.connection, // ✅ Use the real Redis client
+      connection: emailQueue.connection,
       concurrency: 5,
       removeOnComplete: true,
       removeOnFail: false,
@@ -157,7 +157,9 @@ if (emailQueue) {
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/schedule", (req, res) => res.sendFile(path.join(__dirname, "schedule.html")));
 
+// 👇 CORRECTED /schedule ROUTE — NO DUPLICATES, NO IMPORTS INSIDE ROUTE
 app.post("/schedule", async (req, res) => {
+  // 👇 DESTRUCTURE ONLY ONCE — THIS IS THE ONLY INSTANCE
   const { to, subject, body, datetime, timezone } = req.body;
 
   if (!to || !subject || !body || !datetime || !timezone) {
@@ -170,86 +172,70 @@ app.post("/schedule", async (req, res) => {
     return res.status(400).json({ error: "❌ Invalid timezone" });
   }
 
-// Use node-timezone library to parse local time in user's timezone
-const { zonedTimeToUtc } = require('date-fns-tz');
+  // 👇 Import date-fns-tz using require() — NOT at top, but here where needed
+  const { zonedTimeToUtc } = require('date-fns-tz');
 
-// ... inside your /schedule POST route ...
-
-const { to, subject, body, datetime, timezone } = req.body;
-
-if (!to || !subject || !body || !datetime || !timezone) {
-  return res.status(400).json({ error: "Missing required fields" });
-}
-
-if (!Intl.supportedValuesOf("timeZone").includes(timezone)) {
-  return res.status(400).json({ error: "Invalid timezone" });
-}
-
-// 👇 Convert LOCAL datetime string + timezone → UTC timestamp
-let scheduledTime;
-try {
-  scheduledTime = zonedTimeToUtc(datetime, timezone);
-} catch (err) {
-  return res.status(400).json({ error: "Invalid date/time format" });
-}
-
-const now = Date.now();
-const delayMs = scheduledTime.getTime() - now;
-
-if (delayMs < 0) {
-  return res.status(400).json({ error: "Cannot schedule email in the past." });
-}
-
-    const emailJob = await EmailJob.create({
-      to,
-      subject,
-      body,
-      datetime: scheduledTime,
-      timezone,
-      status: "scheduled",
-    });
-
-    if (emailQueue) {
-      await emailQueue.add(
-        "sendEmail",
-        { to, subject, body },
-        {
-          id: emailJob._id.toString(),
-          delay: delayMs,
-        }
-      );
-      console.log(`📅 Scheduled job ${emailJob._id} for ${scheduledTime.toLocaleString()} (${timezone})`);
-    } else {
-      console.warn("⚠️ Redis not available, sending email immediately...");
-      try {
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to,
-          subject,
-          text: body,
-        });
-        await EmailJob.findByIdAndUpdate(emailJob._id, {
-          status: "sent",
-          sentAt: new Date(),
-        });
-        console.log(`✅ Sent email immediately to ${to}`);
-      } catch (err) {
-        await EmailJob.findByIdAndUpdate(emailJob._id, {
-          status: "failed",
-          error: err.message,
-        });
-        return res.status(500).json({ error: "❌ Failed to send email immediately" });
-      }
-    }
-
-    res.json({
-      message: `✅ Email scheduled for ${scheduledTime.toLocaleString()} (${timezone})`,
-      jobId: emailJob._id.toString(),
-    });
+  let scheduledTime;
+  try {
+    scheduledTime = zonedTimeToUtc(datetime, timezone); // Converts local time → UTC
   } catch (err) {
-    console.error("❌ Error scheduling email:", err);
-    res.status(500).json({ error: "❌ Failed to schedule email" });
+    return res.status(400).json({ error: "❌ Invalid date/time format" });
   }
+
+  const now = Date.now();
+  const delayMs = scheduledTime.getTime() - now;
+
+  if (delayMs < 0) {
+    return res.status(400).json({ error: "❌ Cannot schedule email in the past." });
+  }
+
+  const emailJob = await EmailJob.create({
+    to,
+    subject,
+    body,
+    datetime: scheduledTime,         // Stored as UTC (for scheduling)
+    originalLocalTime: datetime,     // Stored as original local string (e.g., "2025-04-05T14:30")
+    timezone,
+    status: "scheduled",
+  });
+
+  if (emailQueue) {
+    await emailQueue.add(
+      "sendEmail",
+      { to, subject, body },
+      {
+        id: emailJob._id.toString(),
+        delay: delayMs,
+      }
+    );
+    console.log(`📅 Scheduled job ${emailJob._id} for ${scheduledTime.toLocaleString()} (${timezone})`);
+  } else {
+    console.warn("⚠️ Redis not available, sending email immediately...");
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to,
+        subject,
+        text: body,
+      });
+      await EmailJob.findByIdAndUpdate(emailJob._id, {
+        status: "sent",
+        sentAt: new Date(),
+      });
+      console.log(`✅ Sent email immediately to ${to}`);
+    } catch (err) {
+      await EmailJob.findByIdAndUpdate(emailJob._id, {
+        status: "failed",
+        error: err.message,
+      });
+      return res.status(500).json({ error: "❌ Failed to send email immediately" });
+    }
+  }
+
+  res.json({
+    message: `✅ Email scheduled for ${scheduledTime.toLocaleString()} (${timezone})`,
+    jobId: emailJob._id.toString(),
+  });
 });
 
 // ---------- Start Server ----------
@@ -260,5 +246,6 @@ app.listen(PORT, () => {
 // Graceful shutdown
 process.on("SIGINT", async () => {
   console.log("\n🛑 Shutting down server...");
+  if (redisClient) await redisClient.quit();
   process.exit(0);
 });

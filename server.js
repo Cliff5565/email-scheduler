@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import { Queue, worker } from "bullmq"; // 👈 FIXED: Added Worker here
+import { Queue, Worker } from "bullmq"; // 👈 FIXED: Added Worker here
 import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import IORedis from "ioredis";

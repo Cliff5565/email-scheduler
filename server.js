@@ -170,7 +170,7 @@ app.post("/schedule", async (req, res) => {
     return res.status(400).json({ error: "❌ Invalid timezone" });
   }
 
-/ Use node-timezone library to parse local time in user's timezone
+// Use node-timezone library to parse local time in user's timezone
 import { zonedTimeToUtc } from 'date-fns-tz';
 
 // ... inside your /schedule POST route ...

@@ -1,4 +1,3 @@
-// server.js
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
@@ -6,6 +5,7 @@ import mongoose from "mongoose";
 import { Queue } from "bullmq";
 import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
+import IORedis from "ioredis"; // added for Redis
 
 dotenv.config();
 
@@ -23,13 +23,21 @@ mongoose
   .catch((err) => console.error("❌ MongoDB error:", err));
 
 // ---------- Redis ----------
-const redisOptions = {
-  host: process.env.REDIS_HOST || "127.0.0.1",
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-};
+let emailQueue = null;
 
-const emailQueue = new Queue("emails", { connection: redisOptions });
+if (process.env.REDIS_URL) {
+  try {
+    const connection = new IORedis(process.env.REDIS_URL, {
+      tls: process.env.REDIS_URL.startsWith("rediss://") ? {} : undefined,
+    });
+    emailQueue = new Queue("emails", { connection });
+    console.log("✅ Connected to Redis and BullMQ queue ready");
+  } catch (err) {
+    console.error("❌ Failed to connect to Redis:", err.message);
+  }
+} else {
+  console.warn("⚠️ No REDIS_URL set. Queue is disabled.");
+}
 
 // ---------- Middleware ----------
 app.use(express.json());
@@ -57,11 +65,15 @@ app.post("/schedule", async (req, res) => {
   try {
     const job = await EmailJob.create({ to, subject, body, datetime });
 
-    await emailQueue.add(
-      "sendEmail",
-      { to, subject, body },
-      { delay: new Date(datetime).getTime() - Date.now() }
-    );
+    if (emailQueue) {
+      await emailQueue.add(
+        "sendEmail",
+        { to, subject, body },
+        { delay: new Date(datetime).getTime() - Date.now() }
+      );
+    } else {
+      console.warn("⚠️ Queue is disabled, job not added to Redis");
+    }
 
     res.send(`✅ Email scheduled for ${datetime}`);
   } catch (err) {

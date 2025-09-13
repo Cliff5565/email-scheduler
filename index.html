@@ -229,14 +229,17 @@ firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 
-// 👇 ADD THIS RIGHT HERE — AFTER firebase.initializeApp()
+// 👇 DEBUGGING LINES — ADD THESE
+console.log("Firebase initialized");
+console.log("Auth object:", auth);
+
 auth.onAuthStateChanged((user) => {
+  console.log("Auth state changed:", user); // ← Check browser DevTools > Console
   if (user) {
-    console.log("✅ User signed in:", user.email);
-    window.location.href = "/schedule"; // Redirect automatically
+    console.log("✅ Redirecting to /schedule...");
+    window.location.href = "/schedule";
   } else {
     console.log("❌ No user signed in");
-    document.getElementById("status").innerText = "";
   }
 });
 

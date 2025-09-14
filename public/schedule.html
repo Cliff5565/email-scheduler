@@ -19,6 +19,27 @@
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eee;
+    }
+    .user-info {
+      color: #555;
+      font-size: 14px;
+    }
+    .logout-btn {
+      background: #ff4d4d;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
     input, textarea {
       width: 100%;
       padding: 12px;
@@ -55,7 +76,13 @@
 </head>
 <body>
   <div class="container">
-    <h1>Schedule an Email</h1>
+    <header>
+      <h1>Schedule an Email</h1>
+      <div>
+        <span id="user-status" class="user-info">Loading...</span>
+        <button class="logout-btn" id="logoutBtn">Logout</button>
+      </div>
+    </header>
 
     <input type="email" id="to" placeholder="Recipient email" required />
     <input type="text" id="subject" placeholder="Subject" required />
@@ -85,7 +112,7 @@
 
     // Initialize Firebase
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getAuth, onAuthStateChanged, getIdToken } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import { getAuth, onAuthStateChanged, getIdToken, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
@@ -103,15 +130,46 @@
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     document.getElementById('timezone-display').textContent = `Your timezone: ${timezone}`;
 
-    // Wait for user authentication
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        console.log("❌ Not authenticated, redirecting to login...");
-        window.location.replace("/");
-        return;
+    // Update user status display
+    function updateUserStatus(user) {
+      const userStatusEl = document.getElementById('user-status');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const scheduleBtn = document.getElementById('scheduleBtn');
+
+      if (user) {
+        userStatusEl.textContent = `Logged in as: ${user.email}`;
+        logoutBtn.style.display = 'inline-block';
+        scheduleBtn.disabled = false;
+      } else {
+        userStatusEl.textContent = 'Not logged in';
+        logoutBtn.style.display = 'none';
+        scheduleBtn.disabled = true;
+        // Redirect to login if logged out
+        window.location.href = "/";
       }
-      console.log("✅ User authenticated:", user.email);
-      document.getElementById('scheduleBtn').disabled = false;
+    }
+
+    // Listen for auth state changes
+    onAuthStateChanged(auth, async (user) => {
+      updateUserStatus(user);
+    });
+
+    // Clear refresh param from URL after first load
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('refresh')) {
+      window.history.replaceState({}, document.title, "/schedule");
+    }
+
+    // Logout button handler
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      try {
+        await signOut(auth);
+        console.log("✅ Logged out");
+        // updateUserStatus will trigger automatically via onAuthStateChanged
+      } catch (err) {
+        console.error("❌ Logout error:", err);
+        alert("Failed to log out. Please try again.");
+      }
     });
 
     // Schedule button handler
@@ -126,9 +184,6 @@
         return;
       }
 
-      const dt = new Date(localDateTime);
-      const utcString = dt.toISOString();
-
       try {
         const idToken = await getIdToken(auth.currentUser);
 
@@ -142,7 +197,7 @@
             to,
             subject,
             body,
-            datetime: utcString,
+            datetime: localDateTime,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
           })
         });

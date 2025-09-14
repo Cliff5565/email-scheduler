@@ -37,8 +37,9 @@ const transporter = nodemailer.createTransport({
 const worker = new Worker(
   "emails",
   async (job) => {
+    console.log(`📧 Worker: processing job.id=${job.id}, sending to ${job.data.to}`);
+
     const { to, subject, body } = job.data;
-    console.log(`📧 Worker: sending email to ${to}`);
 
     const info = await transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -47,6 +48,7 @@ const worker = new Worker(
       text: body,
     });
 
+    // ✅ job.id matches Mongo _id string
     await EmailJob.findByIdAndUpdate(job.id, {
       status: "sent",
       sentAt: new Date(),
@@ -57,9 +59,15 @@ const worker = new Worker(
   { connection, concurrency: 5 }
 );
 
-worker.on("completed", (job) =>
-  console.log(`✅ Job ${job.id} completed`)
-);
+// ---------- Events ----------
+worker.on("active", (job) => {
+  console.log(`🔎 Worker started job.id=${job.id}`);
+});
+
+worker.on("completed", (job) => {
+  console.log(`✅ Job ${job.id} completed`);
+});
+
 worker.on("failed", async (job, err) => {
   console.error(`❌ Job ${job?.id} failed:`, err.message);
   if (job) {

@@ -150,7 +150,7 @@ app.post("/schedule", authenticateFirebase, async (req, res) => {
     originalLocalTime: datetime,
     timezone,
     status: "scheduled",
-    userId: req.user.uid, // Store Firebase UID
+    userId: req.user.uid,
   });
 
   if (emailQueue) {
@@ -189,6 +189,12 @@ app.post("/schedule", authenticateFirebase, async (req, res) => {
     message: `✅ Email scheduled for ${scheduledTime.toLocaleString()} (${timezone})`,
     jobId: emailJob._id.toString(),
   });
+});
+
+// ---------- Logout Route (Optional but recommended) ----------
+app.post("/logout", authenticateFirebase, async (req, res) => {
+  console.log(`👤 User ${req.user.uid} logged out`);
+  res.json({ message: "✅ Logged out successfully" });
 });
 
 // ---------- Start Server ----------

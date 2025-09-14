@@ -3,6 +3,9 @@
 "version": "1.0.0",
 "description": "Email scheduling app with Express, MongoDB, Redis, and Nodemailer",
 "main": "server.js",
+"scripts": {
+    "start": "node server.js"
+  },
 "type": "module",
 "scripts": {
 "start": "node server.js",

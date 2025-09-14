@@ -22,34 +22,29 @@ mongoose
   .then(() => console.log("✅ MongoDB connected (server)"))
   .catch((err) => console.error("❌ MongoDB error:", err));
 
-// ---------- Redis (producer) ----------
+// ---------- Redis (Producer) ----------
 let emailQueue = null;
 let redisClient = null;
 
 if (process.env.REDIS_URL) {
-  try {
-    redisClient = new IORedis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-      tls: process.env.REDIS_URL.startsWith("rediss://") ? {} : undefined,
-    });
+  redisClient = new IORedis(process.env.REDIS_URL, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    tls: process.env.REDIS_URL.startsWith("rediss://") ? {} : undefined,
+  });
 
-    redisClient.on("error", (err) =>
-      console.error("❌ Redis connection error:", err.message)
-    );
+  redisClient.on("error", (err) =>
+    console.error("❌ Redis connection error:", err.message)
+  );
+  redisClient.on("ready", () => console.log("✅ Redis connected (server)"));
 
-    redisClient.on("ready", () => console.log("✅ Redis connected (server)"));
-
-    emailQueue = new Queue("emails", { connection: redisClient });
-    console.log("✅ BullMQ queue initialized (server)");
-  } catch (err) {
-    console.error("❌ Failed to init Redis:", err.message);
-  }
+  emailQueue = new Queue("emails", { connection: redisClient });
+  console.log("✅ BullMQ queue initialized (server)");
 } else {
   console.warn("⚠️ REDIS_URL not set — scheduling disabled");
 }
 
-// ---------- Mailer transport (fallback only) ----------
+// ---------- Fallback mail transport ----------
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
   port: process.env.SMTP_PORT || 587,
@@ -63,12 +58,9 @@ const transporter = nodemailer.createTransport({
 // ---------- Middleware ----------
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(__dirname));
 
 // ---------- Routes ----------
-app.get("/", (req, res) =>
-  res.sendFile(path.join(__dirname, "index.html"))
-);
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/schedule", (req, res) =>
   res.sendFile(path.join(__dirname, "schedule.html"))
 );
@@ -93,7 +85,7 @@ app.post("/schedule", async (req, res) => {
 
   const delayMs = scheduledTime.getTime() - Date.now();
   if (delayMs < 0) {
-    return res.status(400).json({ error: "❌ Past dates not allowed" });
+    return res.status(400).json({ error: "❌ Cannot schedule email in the past" });
   }
 
   const emailJob = await EmailJob.create({
@@ -111,13 +103,13 @@ app.post("/schedule", async (req, res) => {
       "sendEmail",
       { to, subject, body },
       {
-        id: emailJob._id.toString(),
+        id: emailJob._id.toString(), // 👈 store Mongo _id as BullMQ job id
         delay: delayMs,
       }
     );
     console.log(`📅 Scheduled job ${emailJob._id} for ${scheduledTime}`);
   } else {
-    // Fallback: send immediately
+    // Fallback immediate send
     try {
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
@@ -134,7 +126,7 @@ app.post("/schedule", async (req, res) => {
         status: "failed",
         error: err.message,
       });
-      return res.status(500).json({ error: "❌ Mail fallback failed" });
+      return res.status(500).json({ error: "❌ Failed to send immediately" });
     }
   }
 
@@ -150,7 +142,6 @@ app.listen(PORT, () => {
 });
 
 process.on("SIGINT", async () => {
-  console.log("🛑 Shutdown signal received");
   if (redisClient) await redisClient.quit();
   process.exit(0);
 });

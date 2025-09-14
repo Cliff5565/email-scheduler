@@ -1,108 +1,178 @@
-<script>
-  // Firebase config (same as in index.html)
-  const firebaseConfig = {
-    apiKey: "AIzaSyAcNhqW9wkLs3S7O5bp4GMJ0SWJ4d-7GRo",
-    authDomain: "email-scheduler-80501.firebaseapp.com",
-    projectId: "email-scheduler-80501",
-    storageBucket: "email-scheduler-80501.firebasestorage.app",
-    messagingSenderId: "357118084169",
-    appId: "1:357118084169:web:1140c0a3f67f0e9bdfeb98",
-    measurementId: "G-96971SLQXH"
-  };
-
-  // Initialize Firebase
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-  import { getAuth, onAuthStateChanged, getIdToken } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-
-  // Auto-fill datetime with current date/time in user's local time
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hour = String(now.getHours()).padStart(2, '0');
-  const minute = String(now.getMinutes()).padStart(2, '0');
-  document.getElementById('datetime').value = `${year}-${month}-${day}T${hour}:${minute}`;
-
-  // Show detected timezone
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  document.getElementById('timezone-display').textContent = `Your timezone: ${timezone}`;
-
-  // 👇 CRITICAL: Wait for user to be authenticated before allowing form use
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-      // User is not signed in — redirect to login
-      console.log("❌ Not authenticated, redirecting to login...");
-      window.location.href = "/";
-      return;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Email Scheduler</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9fafc;
+      margin: 0;
+      padding: 20px;
     }
-
-    console.log("✅ User authenticated:", user.email);
-
-    // ✅ Now it’s safe to enable the form and make API calls
-    document.getElementById('scheduleBtn').disabled = false;
-  });
-
-  // Schedule button handler
-  document.getElementById('scheduleBtn').addEventListener('click', async () => {
-    const to = document.getElementById('to').value.trim();
-    const subject = document.getElementById('subject').value.trim();
-    const body = document.getElementById('body').value.trim();
-    const localDateTime = document.getElementById('datetime').value;
-
-    if (!to || !subject || !body || !localDateTime) {
-      showError("Please fill all fields.");
-      return;
+    .container {
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
+    input, textarea {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #4a4aff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    #result {
+      margin-top: 15px;
+      padding: 12px;
+      border-radius: 6px;
+      display: none;
+    }
+    .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Schedule an Email</h1>
 
-    const dt = new Date(localDateTime);
-    const utcString = dt.toISOString();
+    <input type="email" id="to" placeholder="Recipient email" required />
+    <input type="text" id="subject" placeholder="Subject" required />
+    <textarea id="body" rows="5" placeholder="Email body" required></textarea>
 
-    try {
-      // 👇 GET ID TOKEN FROM FIREBASE AUTH AND SEND IT WITH REQUEST
-      const idToken = await getIdToken(auth.currentUser);
+    <label for="datetime">Schedule Time:</label>
+    <input type="datetime-local" id="datetime" required />
 
-      const response = await fetch('/schedule', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}` // 👈 THIS IS THE FIX!
-        },
-        body: JSON.stringify({
-          to,
-          subject,
-          body,
-          datetime: utcString,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        })
-      });
+    <div id="timezone-display"></div>
 
-      const result = await response.json();
+    <button id="scheduleBtn" disabled>Send Email</button>
+    <div id="result"></div>
+  </div>
 
-      const resultDiv = document.getElementById('result');
-      resultDiv.className = response.ok ? 'success' : 'error';
-      resultDiv.textContent = result.message || result.error;
-      resultDiv.style.display = 'block';
+  <!-- Import Firebase via Module -->
+  <script type="module">
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyAcNhqW9wkLs3S7O5bp4GMJ0SWJ4d-7GRo",
+      authDomain: "email-scheduler-80501.firebaseapp.com",
+      projectId: "email-scheduler-80501",
+      storageBucket: "email-scheduler-80501.firebasestorage.app",
+      messagingSenderId: "357118084169",
+      appId: "1:357118084169:web:1140c0a3f67f0e9bdfeb98",
+      measurementId: "G-96971SLQXH"
+    };
 
-      if (response.ok) {
-        document.getElementById('to').value = '';
-        document.getElementById('subject').value = '';
-        document.getElementById('body').value = '';
-        document.getElementById('datetime').value = `${year}-${month}-${day}T${hour}:${minute}`;
+    // Initialize Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, getIdToken } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    // Auto-fill datetime with current date/time in user's local time
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    document.getElementById('datetime').value = `${year}-${month}-${day}T${hour}:${minute}`;
+
+    // Show detected timezone
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    document.getElementById('timezone-display').textContent = `Your timezone: ${timezone}`;
+
+    // Wait for user authentication
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        console.log("❌ Not authenticated, redirecting to login...");
+        window.location.replace("/");
+        return;
+      }
+      console.log("✅ User authenticated:", user.email);
+      document.getElementById('scheduleBtn').disabled = false;
+    });
+
+    // Schedule button handler
+    document.getElementById('scheduleBtn').addEventListener('click', async () => {
+      const to = document.getElementById('to').value.trim();
+      const subject = document.getElementById('subject').value.trim();
+      const body = document.getElementById('body').value.trim();
+      const localDateTime = document.getElementById('datetime').value;
+
+      if (!to || !subject || !body || !localDateTime) {
+        showError("Please fill all fields.");
+        return;
       }
 
-    } catch (err) {
-      console.error("API Error:", err);
-      showError("Network error: " + err.message);
-    }
-  });
+      const dt = new Date(localDateTime);
+      const utcString = dt.toISOString();
 
-  function showError(msg) {
-    const resultDiv = document.getElementById('result');
-    resultDiv.className = 'error';
-    resultDiv.textContent = msg;
-    resultDiv.style.display = 'block';
-  }
-</script>
+      try {
+        const idToken = await getIdToken(auth.currentUser);
+
+        const response = await fetch('/schedule', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            to,
+            subject,
+            body,
+            datetime: utcString,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          })
+        });
+
+        const result = await response.json();
+
+        const resultDiv = document.getElementById('result');
+        resultDiv.className = response.ok ? 'success' : 'error';
+        resultDiv.textContent = result.message || result.error;
+        resultDiv.style.display = 'block';
+
+        if (response.ok) {
+          document.getElementById('to').value = '';
+          document.getElementById('subject').value = '';
+          document.getElementById('body').value = '';
+          document.getElementById('datetime').value = `${year}-${month}-${day}T${hour}:${minute}`;
+        }
+
+      } catch (err) {
+        console.error("API Error:", err);
+        showError("Network error: " + err.message);
+      }
+    });
+
+    function showError(msg) {
+      const resultDiv = document.getElementById('result');
+      resultDiv.className = 'error';
+      resultDiv.textContent = msg;
+      resultDiv.style.display = 'block';
+    }
+  </script>
+</body>
+</html>

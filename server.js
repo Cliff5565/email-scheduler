@@ -6,6 +6,7 @@ import { Queue, Worker } from "bullmq";
 import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import IORedis from "ioredis";
+import { zonedTimeToUtc } from "date-fns-tz";
 
 dotenv.config();
 
@@ -159,8 +160,7 @@ app.get("/schedule", (req, res) => res.sendFile(path.join(__dirname, "schedule.h
 
 // 👇 CORRECTED /schedule ROUTE — NO DUPLICATES, NO IMPORTS INSIDE ROUTE
 app.post("/schedule", async (req, res) => {
-  // 👇 DESTRUCTURE ONLY ONCE — THIS IS THE ONLY INSTANCE
-  const { to, subject, body, datetime, timezone } = req.body;
+  const { to, subject, body, datetime, timezone } = req.body; // ✅ declared only once
 
   if (!to || !subject || !body || !datetime || !timezone) {
     return res.status(400).json({
@@ -172,12 +172,9 @@ app.post("/schedule", async (req, res) => {
     return res.status(400).json({ error: "❌ Invalid timezone" });
   }
 
-  // 👇 Import date-fns-tz using require() — NOT at top, but here where needed
-  const { zonedTimeToUtc } = require('date-fns-tz');
-
   let scheduledTime;
   try {
-    scheduledTime = zonedTimeToUtc(datetime, timezone); // Converts local time → UTC
+    scheduledTime = zonedTimeToUtc(datetime, timezone);
   } catch (err) {
     return res.status(400).json({ error: "❌ Invalid date/time format" });
   }

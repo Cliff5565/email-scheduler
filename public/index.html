@@ -128,7 +128,7 @@
       console.log("Auth state changed:", user);
       if (user) {
         console.log("✅ Redirecting to /schedule...");
-        window.location.replace("/schedule"); // 👈 Use replace() for reliable redirect
+        window.location.replace("/schedule?refresh=true");
       } else {
         console.log("❌ No user signed in");
       }

@@ -153,42 +153,53 @@ app.post("/schedule", authenticateFirebase, async (req, res) => {
     userId: req.user.uid,
   });
 
+  // 👇 NEW: Try to add to Redis queue — if it fails, FALL BACK IMMEDIATELY
   if (emailQueue) {
-    await emailQueue.add(
-      "sendEmail",
-      { to, subject, body },
-      {
-        id: emailJob._id.toString(),
-        delay: delayMs,
-      }
-    );
-    console.log(`📅 Scheduled job ${emailJob._id} for ${scheduledTime} by user: ${req.user.uid}`);
-  } else {
-    // Fallback immediate send
     try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to,
-        subject,
-        text: body,
-      });
-      await EmailJob.findByIdAndUpdate(emailJob._id, {
-        status: "sent",
-        sentAt: new Date(),
+      await emailQueue.add(
+        "sendEmail",
+        { to, subject, body },
+        {
+          id: emailJob._id.toString(),
+          delay: delayMs,
+        }
+      );
+      console.log(`📅 Scheduled job ${emailJob._id} for ${scheduledTime} by user: ${req.user.uid}`);
+      return res.json({
+        message: `✅ Email scheduled for ${scheduledTime.toLocaleString()} (${timezone})`,
+        jobId: emailJob._id.toString(),
       });
     } catch (err) {
-      await EmailJob.findByIdAndUpdate(emailJob._id, {
-        status: "failed",
-        error: err.message,
-      });
-      return res.status(500).json({ error: "❌ Failed to send immediately" });
+      console.error("❌ BullMQ queue failed (ECONNRESET/EPIPE), falling back to immediate send:", err.message);
+      // 👇 FALL THROUGH TO Fallback Block
     }
   }
 
-  res.json({
-    message: `✅ Email scheduled for ${scheduledTime.toLocaleString()} (${timezone})`,
-    jobId: emailJob._id.toString(),
-  });
+  // 👇 FALLBACK: Send immediately via Nodemailer (always runs if Redis fails or is absent)
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      text: body,
+    });
+    console.log("✅ Fallback email sent successfully:", info.messageId); // 👈 CRITICAL LOG
+    await EmailJob.findByIdAndUpdate(emailJob._id, {
+      status: "sent",
+      sentAt: new Date(),
+    });
+    res.json({
+      message: `✅ Email sent immediately to ${to}`,
+      jobId: emailJob._id.toString(),
+    });
+  } catch (err) {
+    console.error("❌ Fallback email FAILED (Nodemailer):", err.message); // 👈 CRITICAL LOG
+    await EmailJob.findByIdAndUpdate(emailJob._id, {
+      status: "failed",
+      error: err.message,
+    });
+    return res.status(500).json({ error: "❌ Failed to send immediately: " + err.message });
+  }
 });
 
 // ---------- Logout Route (Optional but recommended) ----------
@@ -198,7 +209,7 @@ app.post("/logout", authenticateFirebase, async (req, res) => {
 });
 
 // ---------- Start Server ----------
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
 

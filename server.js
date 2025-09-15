@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import { Queue } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import IORedis from "ioredis";
@@ -10,6 +10,7 @@ import { zonedTimeToUtc } from "date-fns-tz";
 import { EmailJob } from "./models/EmailJob.js";
 import admin from "firebase-admin";
 
+// ---------- Setup ----------
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,7 +18,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// ---------- Validate Required Env Vars ----------
+// ---------- Validate env vars ----------
 const requiredEnv = [
   "MONGO_URI",
   "SMTP_HOST",
@@ -30,11 +31,11 @@ const requiredEnv = [
 ];
 const missing = requiredEnv.filter((key) => !process.env[key]);
 if (missing.length > 0) {
-  console.error(`❌ Missing required env vars: ${missing.join(", ")}`);
+  console.error(`❌ Missing env vars: ${missing.join(", ")}`);
   process.exit(1);
 }
 
-// ---------- Initialize Firebase Admin SDK ----------
+// ---------- Firebase Admin ----------
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert({
@@ -44,15 +45,15 @@ if (!admin.apps.length) {
     }),
   });
 }
-console.log("✅ Firebase Admin initialized");
+console.log("✅ Firebase Admin ready");
 
-// ---------- MongoDB ----------
+// ---------- Mongo ----------
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB connected (server)"))
+  .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB error:", err));
 
-// ---------- Redis (Producer) ----------
+// ---------- Redis + BullMQ ----------
 let emailQueue = null;
 let redisClient = null;
 
@@ -64,21 +65,56 @@ if (process.env.REDIS_URL) {
   });
 
   redisClient.on("error", (err) =>
-    console.error("❌ Redis connection error:", err.message)
+    console.error("❌ Redis error:", err.message)
   );
-  redisClient.on("ready", () => console.log("✅ Redis connected (server)"));
+  redisClient.on("ready", () => console.log("✅ Redis connected"));
 
   emailQueue = new Queue("emails", { connection: redisClient });
-  console.log("✅ BullMQ queue initialized (server)");
+  console.log("✅ Queue initialized");
+
+  // ---------- Worker in same server ----------
+  new Worker(
+    "emails",
+    async (job) => {
+      console.log("📧 Processing job:", job.id, job.data);
+      const { to, subject, body, emailJobId } = job.data;
+
+      try {
+        const info = await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to,
+          subject,
+          text: body,
+        });
+        console.log("✅ Email sent (job):", info.messageId);
+        if (emailJobId) {
+          await EmailJob.findByIdAndUpdate(emailJobId, {
+            status: "sent",
+            sentAt: new Date(),
+          });
+        }
+      } catch (err) {
+        console.error("❌ Email failed (job):", err.message);
+        if (emailJobId) {
+          await EmailJob.findByIdAndUpdate(emailJobId, {
+            status: "failed",
+            error: err.message,
+          });
+        }
+        throw err; // retry via BullMQ
+      }
+    },
+    { connection: redisClient }
+  );
 } else {
-  console.warn("⚠️ REDIS_URL not set — scheduling disabled");
+  console.warn("⚠️ REDIS_URL not set — jobs will send immediately");
 }
 
-// ---------- Fallback mail transport ----------
+// ---------- Nodemailer ----------
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: process.env.SMTP_PORT || 587,
-  secure: false,
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: Number(process.env.SMTP_PORT) === 465,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -89,43 +125,38 @@ const transporter = nodemailer.createTransport({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 👇 EXPLICIT ROUTES FIRST — BEFORE STATIC FILES
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("/schedule", (req, res) => res.sendFile(path.join(__dirname, "public", "schedule.html")));
+// ---------- Static pages ----------
+app.get("/", (req, res) =>
+  res.sendFile(path.join(__dirname, "public", "index.html"))
+);
+app.get("/schedule", (req, res) =>
+  res.sendFile(path.join(__dirname, "public", "schedule.html"))
+);
+app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
-// 👇 Serve static assets (JS, CSS, images) — but NOT HTML pages
-app.use(express.static(path.join(__dirname, "public"), {
-  index: false, // Prevent auto-serving index.html for folders
-}));
-
-// ---------- Authentication Middleware ----------
+// ---------- Auth ----------
 async function authenticateFirebase(req, res, next) {
   const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "❌ Unauthorized: No token provided" });
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "❌ Unauthorized: No token" });
   }
-
-  const idToken = authHeader.substring(7);
-
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-    req.user = decodedToken; // Attach user info to request
+    const idToken = authHeader.substring(7);
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    req.user = decoded;
     next();
   } catch (err) {
-    console.error("❌ Invalid Firebase ID token:", err);
-    return res.status(401).json({ error: "❌ Invalid or expired authentication token" });
+    console.error("❌ Invalid token:", err.message);
+    return res.status(401).json({ error: "❌ Invalid/expired token" });
   }
 }
 
-// ---------- Protected Route ----------
+// ---------- Schedule route ----------
 app.post("/schedule", authenticateFirebase, async (req, res) => {
   const { to, subject, body, datetime, timezone } = req.body;
-
   if (!to || !subject || !body || !datetime || !timezone) {
-    return res.status(400).json({ error: "❌ Missing required fields" });
+    return res.status(400).json({ error: "❌ Missing fields" });
   }
-
   if (!Intl.supportedValuesOf("timeZone").includes(timezone)) {
     return res.status(400).json({ error: "❌ Invalid timezone" });
   }
@@ -134,12 +165,12 @@ app.post("/schedule", authenticateFirebase, async (req, res) => {
   try {
     scheduledTime = zonedTimeToUtc(datetime, timezone);
   } catch {
-    return res.status(400).json({ error: "❌ Invalid date/time format" });
+    return res.status(400).json({ error: "❌ Invalid datetime" });
   }
 
   const delayMs = scheduledTime.getTime() - Date.now();
   if (delayMs < 0) {
-    return res.status(400).json({ error: "❌ Cannot schedule email in the past" });
+    return res.status(400).json({ error: "❌ Date is in the past" });
   }
 
   const emailJob = await EmailJob.create({
@@ -153,29 +184,28 @@ app.post("/schedule", authenticateFirebase, async (req, res) => {
     userId: req.user.uid,
   });
 
-  // 👇 NEW: Try to add to Redis queue — if it fails, FALL BACK IMMEDIATELY
   if (emailQueue) {
     try {
       await emailQueue.add(
         "sendEmail",
-        { to, subject, body },
+        { to, subject, body, emailJobId: emailJob._id.toString() },
         {
           id: emailJob._id.toString(),
           delay: delayMs,
+          attempts: 3,
+          backoff: { type: "exponential", delay: 2000 },
         }
       );
-      console.log(`📅 Scheduled job ${emailJob._id} for ${scheduledTime} by user: ${req.user.uid}`);
       return res.json({
         message: `✅ Email scheduled for ${scheduledTime.toLocaleString()} (${timezone})`,
         jobId: emailJob._id.toString(),
       });
     } catch (err) {
-      console.error("❌ BullMQ queue failed (ECONNRESET/EPIPE), falling back to immediate send:", err.message);
-      // 👇 FALL THROUGH TO Fallback Block
+      console.error("❌ Queue failed:", err.message);
     }
   }
 
-  // 👇 FALLBACK: Send immediately via Nodemailer (always runs if Redis fails or is absent)
+  // Fallback: send immediately
   try {
     const info = await transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -183,37 +213,32 @@ app.post("/schedule", authenticateFirebase, async (req, res) => {
       subject,
       text: body,
     });
-    console.log("✅ Fallback email sent successfully:", info.messageId); // 👈 CRITICAL LOG
+    console.log("✅ Fallback email sent:", info.messageId);
     await EmailJob.findByIdAndUpdate(emailJob._id, {
       status: "sent",
       sentAt: new Date(),
     });
-    res.json({
-      message: `✅ Email sent immediately to ${to}`,
+    return res.json({
+      message: "✅ Email sent immediately (fallback)",
       jobId: emailJob._id.toString(),
     });
   } catch (err) {
-    console.error("❌ Fallback email FAILED (Nodemailer):", err.message); // 👈 CRITICAL LOG
+    console.error("❌ Fallback failed:", err.message);
     await EmailJob.findByIdAndUpdate(emailJob._id, {
       status: "failed",
       error: err.message,
     });
-    return res.status(500).json({ error: "❌ Failed to send immediately: " + err.message });
+    return res.status(500).json({ error: "❌ Failed to send: " + err.message });
   }
 });
 
-// ---------- Logout Route (Optional but recommended) ----------
-app.post("/logout", authenticateFirebase, async (req, res) => {
+// ---------- Logout ----------
+app.post("/logout", authenticateFirebase, (req, res) => {
   console.log(`👤 User ${req.user.uid} logged out`);
-  res.json({ message: "✅ Logged out successfully" });
+  res.json({ message: "✅ Logged out" });
 });
 
-// ---------- Start Server ----------
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
-
-process.on("SIGINT", async () => {
-  if (redisClient) await redisClient.quit();
-  process.exit(0);
-});
+// ---------- Start ----------
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`🚀 Server running at http://localhost:${PORT}`)
+);

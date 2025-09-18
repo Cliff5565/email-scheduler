@@ -10,7 +10,8 @@ import { zonedTimeToUtc, utcToZonedTime, format } from "date-fns-tz";
 import { EmailJob } from "./models/EmailJob.js";
 import admin from "firebase-admin";
 import multer from "multer";
-import fetch from "node-fetch"; // used by worker to download from Firebase
+import fetch from "node-fetch";
+import cors from "cors"; // Added for CORS support
 
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -29,7 +30,7 @@ const requiredEnv = [
   "FIREBASE_PROJECT_ID",
   "FIREBASE_CLIENT_EMAIL",
   "FIREBASE_PRIVATE_KEY",
-  "FIREBASE_STORAGE_BUCKET", // <== important for Storage
+  "FIREBASE_STORAGE_BUCKET",
 ];
 const missing = requiredEnv.filter((key) => !process.env[key]);
 if (missing.length > 0) {
@@ -81,12 +82,10 @@ if (process.env.REDIS_URL) {
         if (method === "email") {
           let attachments = [];
           if (attachment?.downloadURL) {
-            // fetch from Firebase Storage
             const resp = await fetch(attachment.downloadURL);
+            if (!resp.ok) throw new Error("Failed to download attachment");
             const buffer = await resp.buffer();
-            attachments = [
-              { filename: attachment.filename, content: buffer },
-            ];
+            attachments = [{ filename: attachment.filename, content: buffer }];
           }
 
           const info = await transporter.sendMail({
@@ -98,7 +97,6 @@ if (process.env.REDIS_URL) {
           });
           console.log("✅ Email sent:", info.messageId);
         } else if (method === "sms") {
-          // ⚠️ Place SMS integration here
           console.log(`📱 Mock SMS to ${to}: ${body}`);
         }
 
@@ -134,17 +132,22 @@ const transporter = nodemailer.createTransport({
 });
 
 // ---------- Middleware ----------
+app.use(cors({ origin: true, credentials: true })); // Enable CORS
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ---------- File Upload (Memory) ----------
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+});
 
-// ---------- Auth ----------
+// ---------- Auth Middleware ----------
 async function authenticateFirebase(req, res, next) {
   const authHeader = req.headers.authorization;
+  console.log("Authorization Header:", authHeader); // Debug log
   if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "❌ Unauthorized" });
+    return res.status(401).json({ error: "❌ Unauthorized: Missing or invalid Authorization header" });
   }
   try {
     const idToken = authHeader.substring(7);
@@ -160,7 +163,14 @@ async function authenticateFirebase(req, res, next) {
 // ---------- Schedule Route ----------
 app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, res) => {
   try {
-    const data = req.body.data ? JSON.parse(req.body.data) : req.body;
+    console.log("req.body:", req.body); // Debug log
+    console.log("req.file:", req.file); // Debug log
+    let data;
+    try {
+      data = req.body.data ? JSON.parse(req.body.data) : req.body;
+    } catch (err) {
+      return res.status(400).json({ error: "❌ Invalid JSON in 'data' field" });
+    }
     const { to, subject, body, datetime, timezone, method = "email" } = data;
     if (!to || !body || !datetime || !timezone) {
       return res.status(400).json({ error: "❌ Missing required fields" });
@@ -180,22 +190,20 @@ app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, r
       return res.status(400).json({ error: "❌ Date is in the past" });
     }
 
-    // Upload file to Firebase Storage if provided
     let attachmentMeta = undefined;
     if (req.file && method === "email") {
       const uniqueName = `${Date.now()}-${req.file.originalname}`;
       const fileRef = bucket.file(uniqueName);
-
       await fileRef.save(req.file.buffer, {
         metadata: { contentType: req.file.mimetype },
       });
-      await fileRef.makePublic(); // ⚠️ Or use signedURL for restricted access
-
-      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${uniqueName}`;
-      attachmentMeta = { filename: req.file.originalname, downloadURL: publicUrl };
+      const [signedUrl] = await fileRef.getSignedUrl({
+        action: "read",
+        expires: "03-01-2500",
+      });
+      attachmentMeta = { filename: req.file.originalname, downloadURL: signedUrl };
     }
 
-    // Save job in DB
     const emailJob = await EmailJob.create({
       to,
       subject: method === "email" ? subject : undefined,
@@ -209,7 +217,6 @@ app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, r
       attachment: attachmentMeta,
     });
 
-    // Add to queue or immediate send
     if (emailQueue) {
       await emailQueue.add(
         "sendNotification",
@@ -229,10 +236,10 @@ app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, r
         }
       );
     } else {
-      // Immediate send fallback
       let attachments = [];
       if (attachmentMeta) {
         const resp = await fetch(attachmentMeta.downloadURL);
+        if (!resp.ok) throw new Error("Failed to download attachment");
         const buffer = await resp.buffer();
         attachments = [{ filename: attachmentMeta.filename, content: buffer }];
       }
@@ -254,7 +261,7 @@ app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, r
   }
 });
 
-// ---------- Static ----------
+// ---------- Static Routes ----------
 app.get("/", (req, res) =>
   res.sendFile(path.join(__dirname, "public", "index.html"))
 );
@@ -263,7 +270,7 @@ app.get("/schedule", (req, res) =>
 );
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
-// ---------- Logout ----------
+// ---------- Logout Route ----------
 app.post("/logout", authenticateFirebase, async (req, res) => {
   try {
     await admin.auth().revokeRefreshTokens(req.user.uid);
@@ -273,7 +280,7 @@ app.post("/logout", authenticateFirebase, async (req, res) => {
   }
 });
 
-// ---------- Start ----------
+// ---------- Start Server ----------
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`🚀 Server running on port ${PORT}`)
 );

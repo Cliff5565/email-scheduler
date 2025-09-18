@@ -1,22 +1,21 @@
-// models/EmailJob.js
 import mongoose from "mongoose";
 
-const EmailJobSchema = new mongoose.Schema({
+const emailJobSchema = new mongoose.Schema({
   to: { type: String, required: true },
-  subject: String,
+  subject: { type: String },
   body: { type: String, required: true },
   datetime: { type: Date, required: true },
-  originalLocalTime: String,
-  timezone: String,
-  method: { type: String, enum: ["email", "sms"], default: "email" },
+  originalLocalTime: { type: String, required: true },
+  timezone: { type: String, required: true },
   status: { type: String, enum: ["scheduled", "sent", "failed"], default: "scheduled" },
   userId: { type: String, required: true },
-  sentAt: Date,
-  error: String,
+  method: { type: String, enum: ["email", "sms"], default: "email" },
   attachment: {
-    filename: String,
-    path: String,
+    filename: { type: String },
+    downloadURL: { type: String }
   },
+  sentAt: { type: Date },
+  error: { type: String }
 });
 
-export const EmailJob = mongoose.model("EmailJob", EmailJobSchema);
+export const EmailJob = mongoose.model("EmailJob", emailJobSchema);

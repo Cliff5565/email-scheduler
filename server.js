@@ -10,7 +10,7 @@ import { zonedTimeToUtc, utcToZonedTime, format } from "date-fns-tz";
 import { EmailJob } from "./models/EmailJob.js";
 import admin from "firebase-admin";
 import multer from "multer";
-import fetch from "node-fetch"; // needed for downloading signed URLs
+import fetch from "node-fetch";
 
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -81,16 +81,17 @@ if (process.env.REDIS_URL) {
       try {
         if (method === "email") {
           let attachments = [];
-          if (attachment?.downloadURL) {
-            try {
-              const resp = await fetch(attachment.downloadURL);
-              const buffer = await resp.buffer();
-              attachments = [
-                { filename: attachment.filename, content: buffer },
-              ];
-            } catch (fetchErr) {
-              console.error("⚠️ Failed to fetch attachment:", fetchErr.message);
-            }
+          if (attachment?.objectName) {
+            const fileRef = bucket.file(attachment.objectName);
+            const [signedUrl] = await fileRef.getSignedUrl({
+              action: "read",
+              expires: Date.now() + 60 * 60 * 1000, // valid 1 hour
+            });
+            const resp = await fetch(signedUrl);
+            const buffer = await resp.buffer();
+            attachments = [
+              { filename: attachment.filename, content: buffer },
+            ];
           }
 
           const info = await transporter.sendMail({
@@ -125,7 +126,7 @@ if (process.env.REDIS_URL) {
     { connection: redisClient }
   );
 } else {
-  console.warn("⚠️ REDIS_URL not set — immediate send only");
+  console.warn("⚠️ REDIS_URL not set — notifications sent immediately");
 }
 
 // ---------- Nodemailer ----------
@@ -185,7 +186,7 @@ app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, r
       return res.status(400).json({ error: "❌ Date is in the past" });
     }
 
-    // Upload to Storage → signedURL
+    // Upload to Storage and store object name only
     let attachmentMeta = undefined;
     if (req.file && method === "email") {
       const uniqueName = `${Date.now()}-${req.file.originalname}`;
@@ -195,14 +196,9 @@ app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, r
         metadata: { contentType: req.file.mimetype },
       });
 
-      const [signedUrl] = await fileRef.getSignedUrl({
-        action: "read",
-        expires: Date.now() + 60 * 60 * 1000, // 1 hour
-      });
-
       attachmentMeta = {
         filename: req.file.originalname,
-        downloadURL: signedUrl,
+        objectName: uniqueName,
       };
     }
 
@@ -238,10 +234,15 @@ app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, r
         }
       );
     } else {
-      // immediate send
+      // immediate send fallback
       let attachments = [];
-      if (attachmentMeta?.downloadURL) {
-        const resp = await fetch(attachmentMeta.downloadURL);
+      if (attachmentMeta?.objectName) {
+        const fileRef = bucket.file(attachmentMeta.objectName);
+        const [signedUrl] = await fileRef.getSignedUrl({
+          action: "read",
+          expires: Date.now() + 60 * 60 * 1000,
+        });
+        const resp = await fetch(signedUrl);
         const buffer = await resp.buffer();
         attachments = [
           { filename: attachmentMeta.filename, content: buffer },

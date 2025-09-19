@@ -10,6 +10,7 @@ import { zonedTimeToUtc } from "date-fns-tz";
 import { EmailJob } from "./models/EmailJob.js";
 
 dotenv.config();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -59,12 +60,10 @@ const transporter = nodemailer.createTransport({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---------- Routes ----------
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
-app.get("/schedule", (req, res) =>
-  res.sendFile(path.join(__dirname, "schedule.html"))
-);
+// Serve static files from ./public
+app.use(express.static(path.join(__dirname, "public")));
 
+// ---------- Routes ----------
 app.post("/schedule", async (req, res) => {
   const { to, subject, body, datetime, timezone } = req.body;
 
@@ -103,13 +102,13 @@ app.post("/schedule", async (req, res) => {
       "sendEmail",
       { to, subject, body },
       {
-        id: emailJob._id.toString(), // 👈 store Mongo _id as BullMQ job id
+        id: emailJob._id.toString(),
         delay: delayMs,
       }
     );
     console.log(`📅 Scheduled job ${emailJob._id} for ${scheduledTime}`);
   } else {
-    // Fallback immediate send
+    // Immediate send if Redis is missing
     try {
       await transporter.sendMail({
         from: process.env.EMAIL_USER,

@@ -59,10 +59,12 @@ const transporter = nodemailer.createTransport({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---------- Static Files ----------
-app.use(express.static(path.join(__dirname, "public"))); // ✅ serve public/index.html & public/schedule.html
-
 // ---------- Routes ----------
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+app.get("/schedule", (req, res) =>
+  res.sendFile(path.join(__dirname, "schedule.html"))
+);
+
 app.post("/schedule", async (req, res) => {
   const { to, subject, body, datetime, timezone } = req.body;
 
@@ -101,7 +103,7 @@ app.post("/schedule", async (req, res) => {
       "sendEmail",
       { to, subject, body },
       {
-        id: emailJob._id.toString(), // Mongo ID as BullMQ job id
+        id: emailJob._id.toString(), // 👈 store Mongo _id as BullMQ job id
         delay: delayMs,
       }
     );

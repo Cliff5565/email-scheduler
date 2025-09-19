@@ -59,12 +59,17 @@ const transporter = nodemailer.createTransport({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---------- Routes ----------
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+// ---------- Serve static frontend ----------
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("/", (req, res) =>
+  res.sendFile(path.join(__dirname, "public", "index.html"))
+);
 app.get("/schedule", (req, res) =>
-  res.sendFile(path.join(__dirname, "schedule.html"))
+  res.sendFile(path.join(__dirname, "public", "schedule.html"))
 );
 
+// ---------- API: Schedule ----------
 app.post("/schedule", async (req, res) => {
   const { to, subject, body, datetime, timezone } = req.body;
 
@@ -85,7 +90,9 @@ app.post("/schedule", async (req, res) => {
 
   const delayMs = scheduledTime.getTime() - Date.now();
   if (delayMs < 0) {
-    return res.status(400).json({ error: "❌ Cannot schedule email in the past" });
+    return res
+      .status(400)
+      .json({ error: "❌ Cannot schedule email in the past" });
   }
 
   const emailJob = await EmailJob.create({
@@ -103,13 +110,13 @@ app.post("/schedule", async (req, res) => {
       "sendEmail",
       { to, subject, body },
       {
-        id: emailJob._id.toString(), // 👈 store Mongo _id as BullMQ job id
+        id: emailJob._id.toString(),
         delay: delayMs,
       }
     );
     console.log(`📅 Scheduled job ${emailJob._id} for ${scheduledTime}`);
   } else {
-    // Fallback immediate send
+    // fallback: send immediately
     try {
       await transporter.sendMail({
         from: process.env.EMAIL_USER,

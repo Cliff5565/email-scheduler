@@ -1,3 +1,4 @@
+// server.js
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
@@ -152,92 +153,109 @@ async function authenticateFirebase(req, res, next) {
   }
 }
 
-// ---------- Unified Schedule ----------
-app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, res) => {
-  try {
-    const data = req.body.data ? JSON.parse(req.body.data) : req.body;
-    const { to, subject, body, datetime, timezone, method = "email" } = data;
-
-    if (!to || !body || !datetime || !timezone) {
-      return res.status(400).json({ error: "❌ Missing fields" });
-    }
-    if (!Intl.supportedValuesOf("timeZone").includes(timezone)) {
-      return res.status(400).json({ error: "❌ Invalid timezone" });
-    }
-
-    let scheduledTime;
+// ---------- API: Schedule Notification ----------
+app.post(
+  "/api/schedule",
+  authenticateFirebase,
+  upload.single("file"),
+  async (req, res) => {
     try {
-      scheduledTime = zonedTimeToUtc(datetime, timezone);
-    } catch {
-      return res.status(400).json({ error: "❌ Invalid datetime" });
-    }
+      const data = req.body.data ? JSON.parse(req.body.data) : req.body;
+      const { to, subject, body, datetime, timezone, method = "email" } = data;
 
-    const delayMs = scheduledTime.getTime() - Date.now();
-    if (delayMs < 0) {
-      return res.status(400).json({ error: "❌ Date is in the past" });
-    }
-
-    const attachment =
-      req.file && method === "email"
-        ? { filename: req.file.originalname, path: req.file.path }
-        : undefined;
-
-    const emailJob = await EmailJob.create({
-      to,
-      subject: method === "email" ? subject : undefined,
-      body,
-      datetime: scheduledTime,
-      originalLocalTime: datetime,
-      timezone,
-      status: "scheduled",
-      userId: req.user.uid,
-      method,
-      attachment,
-    });
-
-    if (emailQueue) {
-      await emailQueue.add(
-        "sendNotification",
-        {
-          method,
-          to,
-          subject,
-          body,
-          emailJobId: emailJob._id.toString(),
-          attachment,
-        },
-        {
-          id: emailJob._id.toString(),
-          delay: delayMs,
-          attempts: 3,
-          backoff: { type: "exponential", delay: 2000 },
-        }
-      );
-    } else {
-      // fallback immediate send
-      if (method === "email") {
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to,
-          subject,
-          text: body,
-          attachments: attachment ? [attachment] : [],
-        });
+      if (!to || !body || !datetime || !timezone) {
+        return res.status(400).json({ error: "❌ Missing fields" });
       }
-    }
+      if (!Intl.supportedValuesOf("timeZone").includes(timezone)) {
+        return res.status(400).json({ error: "❌ Invalid timezone" });
+      }
 
-    const localTime = utcToZonedTime(scheduledTime, timezone);
-    return res.json({
-      message: `✅ ${method.toUpperCase()} scheduled for ${format(
-        localTime,
-        "yyyy-MM-dd HH:mm:ss zzz",
-        { timeZone: timezone }
-      )}`,
-      jobId: emailJob._id.toString(),
-    });
+      let scheduledTime;
+      try {
+        scheduledTime = zonedTimeToUtc(datetime, timezone);
+      } catch {
+        return res.status(400).json({ error: "❌ Invalid datetime" });
+      }
+
+      const delayMs = scheduledTime.getTime() - Date.now();
+      if (delayMs < 0) {
+        return res.status(400).json({ error: "❌ Date is in the past" });
+      }
+
+      const attachment =
+        req.file && method === "email"
+          ? { filename: req.file.originalname, path: req.file.path }
+          : undefined;
+
+      const emailJob = await EmailJob.create({
+        to,
+        subject: method === "email" ? subject : undefined,
+        body,
+        datetime: scheduledTime,
+        originalLocalTime: datetime,
+        timezone,
+        status: "scheduled",
+        userId: req.user.uid,
+        method,
+        attachment,
+      });
+
+      if (emailQueue) {
+        await emailQueue.add(
+          "sendNotification",
+          {
+            method,
+            to,
+            subject,
+            body,
+            emailJobId: emailJob._id.toString(),
+            attachment,
+          },
+          {
+            id: emailJob._id.toString(),
+            delay: delayMs,
+            attempts: 3,
+            backoff: { type: "exponential", delay: 2000 },
+          }
+        );
+      } else {
+        // fallback immediate send
+        if (method === "email") {
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to,
+            subject,
+            text: body,
+            attachments: attachment ? [attachment] : [],
+          });
+        }
+      }
+
+      const localTime = utcToZonedTime(scheduledTime, timezone);
+      return res.json({
+        message: `✅ ${method.toUpperCase()} scheduled for ${format(
+          localTime,
+          "yyyy-MM-dd HH:mm:ss zzz",
+          { timeZone: timezone }
+        )}`,
+        jobId: emailJob._id.toString(),
+      });
+    } catch (err) {
+      console.error("❌ Schedule error:", err.message);
+      return res.status(500).json({ error: "❌ Server error: " + err.message });
+    }
+  }
+);
+
+// ---------- API: Logout ----------
+app.post("/api/logout", authenticateFirebase, async (req, res) => {
+  try {
+    await admin.auth().revokeRefreshTokens(req.user.uid);
+    console.log(`👤 User ${req.user.uid} logged out and tokens revoked`);
+    res.json({ message: "✅ Logged out (tokens revoked)" });
   } catch (err) {
-    console.error("❌ Schedule error:", err.message);
-    return res.status(500).json({ error: "❌ Server error: " + err.message });
+    console.error("❌ Logout error:", err.message);
+    res.status(500).json({ error: "❌ Failed to logout" });
   }
 });
 
@@ -250,15 +268,13 @@ app.get("/schedule", (req, res) =>
 );
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
-// ---------- Logout ----------
-app.post("/logout", authenticateFirebase, async (req, res) => {
-  try {
-    await admin.auth().revokeRefreshTokens(req.user.uid);
-    console.log(`👤 User ${req.user.uid} logged out and tokens revoked`);
-    res.json({ message: "✅ Logged out (tokens revoked)" });
-  } catch (err) {
-    console.error("❌ Logout error:", err.message);
-    res.status(500).json({ error: "❌ Failed to logout" });
+// ---------- Global Error Handler ----------
+app.use((err, req, res, next) => {
+  console.error("❌ Unhandled error:", err);
+  if (req.path.startsWith("/api")) {
+    res.status(500).json({ error: "❌ Unexpected server error" });
+  } else {
+    res.status(500).send("Internal Server Error");
   }
 });
 

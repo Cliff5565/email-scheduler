@@ -10,8 +10,7 @@ import { zonedTimeToUtc, utcToZonedTime, format } from "date-fns-tz";
 import { EmailJob } from "./models/EmailJob.js";
 import admin from "firebase-admin";
 import multer from "multer";
-import fetch from "node-fetch";
-import cors from "cors"; // Added for CORS support
+import fetch from "node-fetch"; // needed for downloading signed URLs
 
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -44,7 +43,7 @@ if (!admin.apps.length) {
     credential: admin.credential.cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
     }),
     storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
   });
@@ -68,6 +67,7 @@ if (process.env.REDIS_URL) {
     enableReadyCheck: false,
     tls: process.env.REDIS_URL.startsWith("rediss://") ? {} : undefined,
   });
+
   emailQueue = new Queue("notifications", { connection: redisClient });
   console.log("✅ Redis connected & queue initialized");
 
@@ -82,10 +82,15 @@ if (process.env.REDIS_URL) {
         if (method === "email") {
           let attachments = [];
           if (attachment?.downloadURL) {
-            const resp = await fetch(attachment.downloadURL);
-            if (!resp.ok) throw new Error("Failed to download attachment");
-            const buffer = await resp.buffer();
-            attachments = [{ filename: attachment.filename, content: buffer }];
+            try {
+              const resp = await fetch(attachment.downloadURL);
+              const buffer = await resp.buffer();
+              attachments = [
+                { filename: attachment.filename, content: buffer },
+              ];
+            } catch (fetchErr) {
+              console.error("⚠️ Failed to fetch attachment:", fetchErr.message);
+            }
           }
 
           const info = await transporter.sendMail({
@@ -120,7 +125,7 @@ if (process.env.REDIS_URL) {
     { connection: redisClient }
   );
 } else {
-  console.warn("⚠️ REDIS_URL not set — messages sent immediately");
+  console.warn("⚠️ REDIS_URL not set — immediate send only");
 }
 
 // ---------- Nodemailer ----------
@@ -132,22 +137,17 @@ const transporter = nodemailer.createTransport({
 });
 
 // ---------- Middleware ----------
-app.use(cors({ origin: true, credentials: true })); // Enable CORS
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---------- File Upload (Memory) ----------
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-});
+// ---------- Multer (Memory) ----------
+const upload = multer({ storage: multer.memoryStorage() });
 
-// ---------- Auth Middleware ----------
+// ---------- Auth ----------
 async function authenticateFirebase(req, res, next) {
   const authHeader = req.headers.authorization;
-  console.log("Authorization Header:", authHeader); // Debug log
   if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "❌ Unauthorized: Missing or invalid Authorization header" });
+    return res.status(401).json({ error: "❌ Unauthorized" });
   }
   try {
     const idToken = authHeader.substring(7);
@@ -160,18 +160,12 @@ async function authenticateFirebase(req, res, next) {
   }
 }
 
-// ---------- Schedule Route ----------
+// ---------- Schedule ----------
 app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, res) => {
   try {
-    console.log("req.body:", req.body); // Debug log
-    console.log("req.file:", req.file); // Debug log
-    let data;
-    try {
-      data = req.body.data ? JSON.parse(req.body.data) : req.body;
-    } catch (err) {
-      return res.status(400).json({ error: "❌ Invalid JSON in 'data' field" });
-    }
+    const data = req.body.data ? JSON.parse(req.body.data) : req.body;
     const { to, subject, body, datetime, timezone, method = "email" } = data;
+
     if (!to || !body || !datetime || !timezone) {
       return res.status(400).json({ error: "❌ Missing required fields" });
     }
@@ -185,23 +179,31 @@ app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, r
     } catch {
       return res.status(400).json({ error: "❌ Invalid datetime" });
     }
+
     const delayMs = scheduledTime.getTime() - Date.now();
     if (delayMs < 0) {
       return res.status(400).json({ error: "❌ Date is in the past" });
     }
 
+    // Upload to Storage → signedURL
     let attachmentMeta = undefined;
     if (req.file && method === "email") {
       const uniqueName = `${Date.now()}-${req.file.originalname}`;
       const fileRef = bucket.file(uniqueName);
+
       await fileRef.save(req.file.buffer, {
         metadata: { contentType: req.file.mimetype },
       });
+
       const [signedUrl] = await fileRef.getSignedUrl({
         action: "read",
-        expires: "03-01-2500",
+        expires: Date.now() + 60 * 60 * 1000, // 1 hour
       });
-      attachmentMeta = { filename: req.file.originalname, downloadURL: signedUrl };
+
+      attachmentMeta = {
+        filename: req.file.originalname,
+        downloadURL: signedUrl,
+      };
     }
 
     const emailJob = await EmailJob.create({
@@ -236,18 +238,26 @@ app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, r
         }
       );
     } else {
+      // immediate send
       let attachments = [];
-      if (attachmentMeta) {
+      if (attachmentMeta?.downloadURL) {
         const resp = await fetch(attachmentMeta.downloadURL);
-        if (!resp.ok) throw new Error("Failed to download attachment");
         const buffer = await resp.buffer();
-        attachments = [{ filename: attachmentMeta.filename, content: buffer }];
+        attachments = [
+          { filename: attachmentMeta.filename, content: buffer },
+        ];
       }
-      await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text: body, attachments });
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to,
+        subject,
+        text: body,
+        attachments,
+      });
     }
 
     const localTime = utcToZonedTime(scheduledTime, timezone);
-    return res.json({
+    res.json({
       message: `✅ ${method.toUpperCase()} scheduled for ${format(
         localTime,
         "yyyy-MM-dd HH:mm:ss zzz",
@@ -261,7 +271,7 @@ app.post("/schedule", authenticateFirebase, upload.single("file"), async (req, r
   }
 });
 
-// ---------- Static Routes ----------
+// ---------- Static ----------
 app.get("/", (req, res) =>
   res.sendFile(path.join(__dirname, "public", "index.html"))
 );
@@ -270,7 +280,7 @@ app.get("/schedule", (req, res) =>
 );
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
-// ---------- Logout Route ----------
+// ---------- Logout ----------
 app.post("/logout", authenticateFirebase, async (req, res) => {
   try {
     await admin.auth().revokeRefreshTokens(req.user.uid);
@@ -280,7 +290,7 @@ app.post("/logout", authenticateFirebase, async (req, res) => {
   }
 });
 
-// ---------- Start Server ----------
+// ---------- Start ----------
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Server running on port ${PORT}`)
+  console.log(`🚀 Server running on http://localhost:${PORT}`)
 );

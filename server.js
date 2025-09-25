@@ -11,6 +11,7 @@ import { zonedTimeToUtc, utcToZonedTime, format } from "date-fns-tz";
 import { EmailJob } from "./models/EmailJob.js";
 import admin from "firebase-admin";
 import multer from "multer";
+import twilio from 'twilio'; // ✅ ADDED
 
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -58,6 +59,15 @@ mongoose
 let emailQueue = null;
 let redisClient = null;
 
+// ✅ Initialize Twilio Client
+let twilioClient = null;
+if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+  twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  console.log("✅ Twilio SMS ready");
+} else {
+  console.warn("⚠️ TWILIO_* env vars not set — SMS will be mocked");
+}
+
 if (process.env.REDIS_URL) {
   redisClient = new IORedis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
@@ -91,8 +101,17 @@ if (process.env.REDIS_URL) {
           });
           console.log("✅ Email sent (job):", info.messageId);
         } else if (method === "sms") {
-          // ⚠️ Integrate Twilio or similar here
-          console.log(`📱 Mock SMS sent to ${to}: ${body}`);
+          // ✅ REAL SMS via Twilio
+          if (twilioClient) {
+            const message = await twilioClient.messages.create({
+              body: body,
+              from: process.env.TWILIO_PHONE_NUMBER,
+              to: to,
+            });
+            console.log(`✅ SMS sent (job): ${message.sid} to ${to}`);
+          } else {
+            console.log(`📱 Mock SMS sent to ${to}: ${body}`);
+          }
         }
 
         if (emailJobId) {
@@ -170,6 +189,14 @@ app.post(
         return res.status(400).json({ error: "❌ Invalid timezone" });
       }
 
+      // ✅ Validate phone number for SMS
+      if (method === "sms") {
+        const phoneRegex = /^\+[1-9]\d{1,14}$/; // E.164 format
+        if (!phoneRegex.test(to)) {
+          return res.status(400).json({ error: "❌ Invalid phone number. Use E.164 format: +1234567890" });
+        }
+      }
+
       let scheduledTime;
       try {
         scheduledTime = zonedTimeToUtc(datetime, timezone);
@@ -228,6 +255,18 @@ app.post(
             text: body,
             attachments: attachment ? [attachment] : [],
           });
+        } else if (method === "sms") {
+          // ✅ Immediate SMS (no Redis)
+          if (twilioClient) {
+            const message = await twilioClient.messages.create({
+              body: body,
+              from: process.env.TWILIO_PHONE_NUMBER,
+              to: to,
+            });
+            console.log(`✅ SMS sent immediately: ${message.sid} to ${to}`);
+          } else {
+            console.log(`📱 Mock SMS sent immediately to ${to}: ${body}`);
+          }
         }
       }
 

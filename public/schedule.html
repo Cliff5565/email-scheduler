@@ -1,90 +1,134 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Notification Scheduler</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f9fafc;
-      margin: 0;
-      padding: 20px;
-    }
-    .container {
-      max-width: 600px;
-      margin: 50px auto;
-      padding: 20px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid #eee;
-    }
-    .user-info {
-      color: #555;
-      font-size: 14px;
-    }
-    .logout-btn {
-      background: #ff4d4d;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 12px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    input, textarea, select {
-      width: 100%;
-      padding: 12px;
-      margin: 10px 0;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-    button {
-      width: 100%;
-      padding: 12px;
-      background: #4a4aff;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-      margin-top: 15px;
-    }
-    button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-    #result {
-      margin-top: 15px;
-      padding: 12px;
-      border-radius: 6px;
-      display: none;
-    }
-    .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>⏰ Schedule Notification</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f9fafc;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width:220px;
+  background:#222;
+  color:white;
+  display:flex;
+  flex-direction:column;
+  padding:20px 0;
+}
+.sidebar h2 {
+  text-align:center;
+  margin-bottom:30px;
+  color:#4a90e2;
+}
+.sidebar a {
+  padding:12px 20px;
+  text-decoration:none;
+  color:white;
+  display:block;
+}
+.sidebar a:hover, .sidebar a.active {
+  background:#4a90e2;
+  cursor:pointer;
+}
+.sidebar button {
+  margin:20px;
+  padding:10px;
+  border:none;
+  border-radius:5px;
+  background:#ff4d4d;
+  color:white;
+  cursor:pointer;
+}
+
+/* Main */
+.main {
+  flex:1;
+  padding:20px;
+  overflow-y:auto;
+}
+
+.container {
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+header {
+  margin-bottom: 20px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.user-info {
+  color: #555;
+  font-size: 14px;
+}
+
+input, textarea, select {
+  width: 100%;
+  padding: 12px;
+  margin: 10px 0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+button.submit-btn {
+  width: 100%;
+  padding: 12px;
+  background: #4a4aff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 15px;
+}
+button.submit-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+#result {
+  margin-top: 15px;
+  padding: 12px;
+  border-radius: 6px;
+  display: none;
+}
+.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+</style>
 </head>
 <body>
+<!-- Sidebar -->
+<div class="sidebar">
+  <h2>Scheduler</h2>
+  <a href="/dashboard.html">📊 Dashboard</a>
+  <a href="/schedule" class="active">⏰ Schedule</a>
+  <button id="logoutBtn">Logout</button>
+</div>
+
+<!-- Main -->
+<div class="main">
   <div class="container">
     <header>
       <h1>Schedule a Notification</h1>
-      <div>
-        <span id="user-status" class="user-info">Loading...</span>
-        <button class="logout-btn" id="logoutBtn">Logout</button>
-      </div>
+      <div><span id="user-status" class="user-info">Loading...</span></div>
     </header>
 
-    <!-- Method selector -->
+    <!-- Method -->
     <label for="method">Choose Method:</label>
     <select id="method">
       <option value="email" selected>Email</option>
@@ -103,156 +147,110 @@
 
     <div id="timezone-display"></div>
 
-    <button id="scheduleBtn" disabled>Schedule</button>
+    <button class="submit-btn" id="scheduleBtn" disabled>Schedule</button>
     <div id="result"></div>
   </div>
+</div>
 
-  <!-- Import Firebase via Module -->
-  <script type="module">
-    // ✅ FIXED: Removed trailing spaces in URLs
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-    // Firebase config
-    const firebaseConfig = {
-      apiKey: "AIzaSyAcNhqW9wkLs3S7O5bp4GMJ0SWJ4d-7GRo",
-      authDomain: "email-scheduler-80501.firebaseapp.com",
-      projectId: "email-scheduler-80501",
-      storageBucket: "email-scheduler-80501.firebasestorage.app",
-      messagingSenderId: "357118084169",
-      appId: "1:357118084169:web:1140c0a3f67f0e9bdfeb98",
-      measurementId: "G-96971SLQXH"
-    };
+const firebaseConfig = {
+  apiKey: "AIzaSyAcNhqW9wkLs3S7O5bp4GMJ0SWJ4d-7GRo",
+  authDomain: "email-scheduler-80501.firebaseapp.com",
+  projectId: "email-scheduler-80501",
+  storageBucket: "email-scheduler-80501.appspot.com",
+  messagingSenderId: "357118084169",
+  appId: "1:357118084169:web:1140c0a3f67f0e9bdfeb98",
+  measurementId: "G-96971SLQXH"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
+// Pre-fill date
+const now = new Date();
+const pad = n => String(n).padStart(2,'0');
+document.getElementById('datetime').value =
+`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-    // Auto-fill datetime
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    document.getElementById('datetime').value =
-      `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+// Show timezone
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+document.getElementById('timezone-display').textContent = `Your timezone: ${timezone}`;
 
-    // Show timezone
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    document.getElementById('timezone-display').textContent = `Your timezone: ${timezone}`;
+function updateUserStatus(user) {
+  const statusEl = document.getElementById('user-status');
+  const scheduleBtn = document.getElementById('scheduleBtn');
+  if (user) {
+    statusEl.textContent = `Logged in as: ${user.email}`;
+    scheduleBtn.disabled = false;
+  } else {
+    statusEl.textContent = 'Not logged in';
+    scheduleBtn.disabled = true;
+    window.location.href = "/";
+  }
+}
+onAuthStateChanged(auth, updateUserStatus);
 
-    function updateUserStatus(user) {
-      const userStatusEl = document.getElementById('user-status');
-      const logoutBtn = document.getElementById('logoutBtn');
-      const scheduleBtn = document.getElementById('scheduleBtn');
-      if (user) {
-        userStatusEl.textContent = `Logged in as: ${user.email}`;
-        logoutBtn.style.display = 'inline-block';
-        scheduleBtn.disabled = false;
-      } else {
-        userStatusEl.textContent = 'Not logged in';
-        logoutBtn.style.display = 'none';
-        scheduleBtn.disabled = true;
-        window.location.href = "/";
-      }
+// Logout
+document.getElementById('logoutBtn').addEventListener('click', async()=>{
+  try {
+    if(auth.currentUser){
+      const token = await auth.currentUser.getIdToken();
+      await fetch('/api/logout',{
+        method:'POST',
+        headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}
+      });
     }
+    await signOut(auth);
+    window.location.href="/";
+  }catch(err){
+    alert("Logout failed: "+err.message);
+  }
+});
 
-    onAuthStateChanged(auth, updateUserStatus);
+// Schedule
+document.getElementById('scheduleBtn').addEventListener('click', async()=>{
+  const method=document.getElementById('method').value;
+  const to=document.getElementById('to').value.trim();
+  const subject=document.getElementById('subject').value.trim();
+  const body=document.getElementById('body').value.trim();
+  const localDateTime=document.getElementById('datetime').value;
+  const file=document.getElementById('file').files[0];
 
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
-      try {
-        // ✅ Call backend to revoke tokens
-        if (auth.currentUser) {
-          const idToken = await auth.currentUser.getIdToken();
-          await fetch('/api/logout', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${idToken}`,
-              'Content-Type': 'application/json'
-            }
-          });
-        }
+  if(!to||!body||!localDateTime){ showError("Please fill required fields."); return; }
+  if(!auth.currentUser){ showError("Not logged in."); return; }
 
-        await signOut(auth); // Sign out locally
-        console.log("✅ Logged out");
-        window.location.href = "/";
-      } catch (err) {
-        console.error("❌ Logout error:", err);
-        alert("Failed to log out. Please try again.");
-      }
-    });
+  try {
+    const idToken=await auth.currentUser.getIdToken();
+    const payload={method,to,subject:method==="email"?subject:undefined,body,datetime:localDateTime,timezone};
 
-    document.getElementById('scheduleBtn').addEventListener('click', async () => {
-      const method = document.getElementById('method').value;
-      const to = document.getElementById('to').value.trim();
-      const subject = document.getElementById('subject').value.trim();
-      const body = document.getElementById('body').value.trim();
-      const localDateTime = document.getElementById('datetime').value;
-      const fileInput = document.getElementById('file');
-      const file = fileInput.files[0];
-
-      if (!to || !body || !localDateTime) {
-        showError("Please fill required fields.");
-        return;
-      }
-
-      // ✅ SAFETY CHECK: Ensure user is logged in
-      if (!auth.currentUser) {
-        showError("User not logged in. Please log in again.");
-        return;
-      }
-
-      try {
-        // ✅ CORRECT WAY: Get token from user object
-        const idToken = await auth.currentUser.getIdToken();
-
-        const payload = {
-          method,
-          to,
-          subject: method === "email" ? subject : undefined,
-          body,
-          datetime: localDateTime,
-          timezone
-        };
-
-        let response;
-        if (file) {
-          // Multipart form with file + JSON
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("data", JSON.stringify(payload));
-
-          // ✅ FIXED: Use correct endpoint /api/schedule
-          response = await fetch('/api/schedule', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${idToken}` },
-            body: formData
-          });
-        } else {
-          response = await fetch('/api/schedule', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${idToken}`
-            },
-            body: JSON.stringify(payload)
-          });
-        }
-
-        const result = await response.json();
-        const resultDiv = document.getElementById('result');
-        resultDiv.className = response.ok ? 'success' : 'error';
-        resultDiv.textContent = result.message || result.error;
-        resultDiv.style.display = 'block';
-
-      } catch (err) {
-        console.error("API Error:", err);
-        showError("Network error: " + err.message);
-      }
-    });
-
-    function showError(msg) {
-      const resultDiv = document.getElementById('result');
-      resultDiv.className = 'error';
-      resultDiv.textContent = msg;
-      resultDiv.style.display = 'block';
+    let res;
+    if(file){
+      const formData=new FormData();
+      formData.append("file",file);
+      formData.append("data",JSON.stringify(payload));
+      res=await fetch('/api/schedule',{method:'POST',headers:{Authorization:`Bearer ${idToken}`},body:formData});
+    }else{
+      res=await fetch('/api/schedule',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${idToken}`},
+        body:JSON.stringify(payload)
+      });
     }
-  </script>
+    const result=await res.json();
+    showMessage(result.message||result.error,res.ok);
+  }catch(err){ showError("Network error: "+err.message); }
+});
+
+function showMessage(msg,success){
+  const div=document.getElementById('result');
+  div.className=success?'success':'error';
+  div.textContent=msg;
+  div.style.display='block';
+}
+function showError(msg){ showMessage(msg,false); }
+</script>
 </body>
 </html>

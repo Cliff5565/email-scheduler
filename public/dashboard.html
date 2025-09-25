@@ -1,72 +1,132 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>📊 Dashboard with Calendar</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>📊 Dashboard</title>
 
-  <!-- ✅ FullCalendar -->
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css" rel="stylesheet"/>
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<!-- FullCalendar -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background:#f9fafc;
-      margin:0; padding:20px;
-    }
-    .container { max-width: 1000px; margin:auto; }
-    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
-    .summary { display:flex; gap:20px; margin-bottom:20px; }
-    .card {
-      flex:1; background:#fff; padding:15px; text-align:center;
-      border-radius:8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    .card h2 { margin:0; font-size:2em; }
-    #calendar {
-      max-width: 900px;
-      margin: 20px auto;
-      background: #fff;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      min-height: 600px;
-    }
-    #jobList { margin-top:20px; }
-    .job {
-      background:#fff; padding:10px; margin-bottom:10px;
-      border-radius:6px; border:1px solid #ddd;
-    }
-    .job button {
-      margin-top:8px; background:#4a4aff; color:#fff; border:none;
-      padding:6px 10px; border-radius:4px; cursor:pointer;
-    }
-    /* ✅ Modal */
-    .modal {
-      display:none; position:fixed; top:0; left:0; right:0; bottom:0;
-      background:rgba(0,0,0,0.5); justify-content:center; align-items:center;
-    }
-    .modal-content {
-      background:#fff; padding:20px; border-radius:8px; max-width:400px; width:90%;
-    }
-    .modal-content h3 { margin-top:0; }
-    .modal-content input, .modal-content textarea {
-      width:100%; margin-bottom:10px; padding:8px;
-      border:1px solid #ccc; border-radius:4px;
-    }
-    .modal-content button { margin-right:8px; }
-  </style>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background:#f9fafc;
+  margin:0; padding:0;
+  display:flex;
+  height:100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width:220px;
+  background:#222;
+  color:white;
+  display:flex;
+  flex-direction:column;
+  padding:20px 0;
+}
+.sidebar h2 {
+  text-align:center;
+  margin-bottom:30px;
+  color:#4a90e2;
+}
+.sidebar a {
+  padding:12px 20px;
+  text-decoration:none;
+  color:white;
+  display:block;
+}
+.sidebar a:hover, .sidebar a.active {
+  background:#4a90e2;
+  cursor:pointer;
+}
+.sidebar button {
+  margin:20px;
+  padding:10px;
+  border:none;
+  border-radius:5px;
+  background:#ff4d4d;
+  color:white;
+  cursor:pointer;
+}
+
+.main {
+  flex:1;
+  padding:20px;
+  overflow-y:auto;
+}
+
+/* Summary cards */
+.summary { display:flex; gap:20px; margin-bottom:20px; flex-wrap:wrap; }
+.card {
+  flex:1; min-width:150px;
+  background:#fff; padding:15px; text-align:center;
+  border-radius:8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.card h2 { margin:0; font-size:2em; }
+
+/* Calendar */
+#calendar {
+  max-width: 900px;
+  margin: 20px auto;
+  background:#fff;
+  padding: 10px;
+  border-radius:8px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.1);
+  min-height:600px;
+}
+
+/* Job cards */
+#jobList { margin-top:20px; }
+.job {
+  background:#fff;
+  padding:10px;
+  margin-bottom:10px;
+  border-radius:6px;
+  border:1px solid #ddd;
+}
+.job button {
+  margin-top:8px;
+  background:#4a4aff;
+  color:#fff;
+  border:none;
+  padding:6px 10px;
+  border-radius:4px;
+  cursor:pointer;
+}
+
+/* Modal */
+.modal {
+  display:none; position:fixed; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,0.5);
+  justify-content:center; align-items:center;
+}
+.modal-content {
+  background:#fff; padding:20px; border-radius:8px; max-width:400px; width:90%;
+}
+.modal-content h3 { margin-top:0; }
+.modal-content input, .modal-content textarea {
+  width:100%; margin-bottom:10px; padding:8px;
+  border:1px solid #ccc; border-radius:4px;
+}
+</style>
 </head>
 <body>
-<div class="container">
-  <header>
-    <h1>📊 Dashboard</h1>
-    <button id="logoutBtn" style="background:#ff4d4d; color:#fff; border:none; padding:8px 12px; border-radius:5px; cursor:pointer;">
-      Logout
-    </button>
-  </header>
+<!-- Sidebar -->
+<div class="sidebar">
+  <h2>Scheduler</h2>
+  <a href="/dashboard.html" class="active">📊 Dashboard</a>
+  <a href="/schedule">⏰ Schedule</a>
+  <button id="logoutBtn">Logout</button>
+</div>
 
-  <!-- Summary cards -->
+<!-- Main content -->
+<div class="main">
+  <h1>📊 Dashboard</h1>
+
+  <!-- Summary -->
   <div class="summary">
     <div class="card">
       <h2 id="emailCount">0</h2>
@@ -82,12 +142,12 @@
   <h2>📅 Schedule Overview</h2>
   <div id="calendar"></div>
 
-  <!-- Job List -->
+  <!-- Job list -->
   <h2>📋 Upcoming Jobs</h2>
   <div id="jobList"></div>
 </div>
 
-<!-- ✅ Edit Modal -->
+<!-- Edit Modal -->
 <div class="modal" id="editModal">
   <div class="modal-content">
     <h3>Edit Job</h3>
@@ -101,46 +161,55 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+// Firebase Config (same as login)
+const firebaseConfig = {
+  apiKey: "AIzaSyAcNhqW9wkLs3S7O5bp4GMJ0SWJ4d-7GRo",
+  authDomain: "email-scheduler-80501.firebaseapp.com",
+  projectId: "email-scheduler-80501",
+  storageBucket: "email-scheduler-80501.appspot.com",
+  messagingSenderId: "357118084169",
+  appId: "1:357118084169:web:1140c0a3f67f0e9bdfeb98",
+  measurementId: "G-96971SLQXH"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
 let jobs = [];
 let calendar;
 let editingJobId = null;
 
-document.addEventListener("DOMContentLoaded", async function () {
-  await fetchJobs();
-});
-
-// ✅ Fetch jobs from server
+// Fetch jobs
 async function fetchJobs() {
-  try {
-    const res = await fetch("/api/jobs");
-    const data = await res.json();
-    jobs = data.jobs || [];
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch("/api/jobs", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  jobs = data.jobs || [];
 
-    // update counts
-    document.getElementById("emailCount").innerText = jobs.filter(j => j.method==="email").length;
-    document.getElementById("smsCount").innerText = jobs.filter(j => j.method==="sms").length;
+  document.getElementById("emailCount").innerText = data.counts?.email ?? 0;
+  document.getElementById("smsCount").innerText = data.counts?.sms ?? 0;
 
-    renderCalendar();
-    renderJobList();
-  } catch(err) {
-    console.error(err);
-    alert("Failed to load jobs");
-  }
+  renderCalendar();
+  renderJobList();
 }
 
-// ✅ Render calendar with jobs
+// Calendar
 function renderCalendar() {
-  const events = jobs.map(job => ({
+  const events = jobs.map(job=>({
     id: job._id,
-    title: (job.method==="email" ? "📧 " : "📱 ") + (job.subject || job.body || job.to),
+    title: (job.method==="email" ? "📧 " : "📱 ")+(job.subject || job.body || job.to),
     start: job.datetime
   }));
   if(!calendar) {
     calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
-      initialView: "dayGridMonth",
-      events: events,
-      eventClick: (info)=> openEditModal(info.event.id)
+      initialView:"dayGridMonth",
+      events,
+      eventClick:(info)=>openEditModal(info.event.id)
     });
     calendar.render();
   } else {
@@ -149,14 +218,15 @@ function renderCalendar() {
   }
 }
 
-// ✅ Render job list
+// Job List
 function renderJobList() {
   const list = document.getElementById("jobList");
-  list.innerHTML = "";
+  list.innerHTML="";
   jobs.forEach(job=>{
-    const div = document.createElement("div");
+    if(job.status!=="scheduled") return;
+    const div=document.createElement("div");
     div.className="job";
-    div.innerHTML = `
+    div.innerHTML=`
       <strong>${job.method.toUpperCase()}</strong> → ${job.to}<br/>
       At: ${new Date(job.datetime).toLocaleString()}<br/>
       ${job.subject ? "Subject: "+job.subject : job.body || ""}<br/>
@@ -166,48 +236,54 @@ function renderJobList() {
   });
 }
 
-// ✅ Open modal for editing
-function openEditModal(id) {
-  const job = jobs.find(j => j._id===id || j.id===id);
+// Modal open/close
+window.openEditModal=function(id){
+  const job=jobs.find(j=>j._id===id);
   if(!job) return;
-  editingJobId = job._id || job.id;
-
-  document.getElementById("editTo").value = job.to || "";
-  document.getElementById("editDatetime").value = job.datetime ? job.datetime.slice(0,16) : "";
-  document.getElementById("editBody").value = job.subject || job.body || "";
-
+  editingJobId=id;
+  document.getElementById("editTo").value=job.to||"";
+  document.getElementById("editDatetime").value=job.datetime?job.datetime.slice(0,16):"";
+  document.getElementById("editBody").value=job.subject||job.body||"";
   document.getElementById("editModal").style.display="flex";
-}
-function closeModal() {
+};
+window.closeModal=function(){
   document.getElementById("editModal").style.display="none";
 }
 
-// ✅ Save edited job
-document.getElementById("saveJobBtn").addEventListener("click", async ()=>{
+// Save edit
+document.getElementById("saveJobBtn").addEventListener("click",async()=>{
   if(!editingJobId) return;
-
-  const payload = {
-    to: document.getElementById("editTo").value,
-    datetime: new Date(document.getElementById("editDatetime").value).toISOString(),
-    body: document.getElementById("editBody").value,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  const payload={
+    to:document.getElementById("editTo").value,
+    datetime:new Date(document.getElementById("editDatetime").value).toISOString(),
+    body:document.getElementById("editBody").value,
+    timezone:Intl.DateTimeFormat().resolvedOptions().timeZone
   };
+  const token=await auth.currentUser.getIdToken();
+  const res=await fetch(`/api/jobs/${editingJobId}`,{
+    method:"PUT",
+    headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+    body:JSON.stringify(payload)
+  });
+  const result=await res.json();
+  alert(result.message||result.error);
+  closeModal();
+  fetchJobs();
+});
 
-  try {
-    const res = await fetch(`/api/jobs/${editingJobId}`, {
-      method:"PUT",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(payload)
-    });
-    const result = await res.json();
-    alert(result.message || "Updated");
-
-    closeModal();
+// Auth guard
+onAuthStateChanged(auth,(user)=>{
+  if(!user){
+    window.location.href="/";
+  }else{
     fetchJobs();
-  } catch(err) {
-    console.error(err);
-    alert("Failed to update job");
   }
+});
+
+// Logout
+document.getElementById("logoutBtn").addEventListener("click",async()=>{
+  await signOut(auth);
+  window.location.href="/";
 });
 </script>
 </body>

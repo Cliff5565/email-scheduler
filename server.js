@@ -1,3 +1,4 @@
+// server.js
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
@@ -6,11 +7,11 @@ import { Queue, Worker } from "bullmq";
 import nodemailer from "nodemailer";
 import { fileURLToPath } from "url";
 import IORedis from "ioredis";
-import { zonedTimeToUtc } from "date-fns-tz";
+import { zonedTimeToUtc, utcToZonedTime, format } from "date-fns-tz";
 import { EmailJob } from "./models/EmailJob.js";
 import admin from "firebase-admin";
+import multer from "multer";
 
-// ---------- Setup ----------
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,24 +70,31 @@ if (process.env.REDIS_URL) {
   );
   redisClient.on("ready", () => console.log("✅ Redis connected"));
 
-  emailQueue = new Queue("emails", { connection: redisClient });
+  emailQueue = new Queue("notifications", { connection: redisClient });
   console.log("✅ Queue initialized");
 
-  // ---------- Worker in same server ----------
+  // ---------- Worker ----------
   new Worker(
-    "emails",
+    "notifications",
     async (job) => {
-      console.log("📧 Processing job:", job.id, job.data);
-      const { to, subject, body, emailJobId } = job.data;
+      console.log("📧/📱 Processing job:", job.id, job.data);
+      const { method, to, subject, body, emailJobId, attachment } = job.data;
 
       try {
-        const info = await transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to,
-          subject,
-          text: body,
-        });
-        console.log("✅ Email sent (job):", info.messageId);
+        if (method === "email") {
+          const info = await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to,
+            subject,
+            text: body,
+            attachments: attachment ? [attachment] : [],
+          });
+          console.log("✅ Email sent (job):", info.messageId);
+        } else if (method === "sms") {
+          // ⚠️ Integrate Twilio or similar here
+          console.log(`📱 Mock SMS sent to ${to}: ${body}`);
+        }
+
         if (emailJobId) {
           await EmailJob.findByIdAndUpdate(emailJobId, {
             status: "sent",
@@ -94,20 +102,20 @@ if (process.env.REDIS_URL) {
           });
         }
       } catch (err) {
-        console.error("❌ Email failed (job):", err.message);
+        console.error("❌ Notification failed:", err.message);
         if (emailJobId) {
           await EmailJob.findByIdAndUpdate(emailJobId, {
             status: "failed",
             error: err.message,
           });
         }
-        throw err; // retry via BullMQ
+        throw err; // let BullMQ retry
       }
     },
     { connection: redisClient }
   );
 } else {
-  console.warn("⚠️ REDIS_URL not set — jobs will send immediately");
+  console.warn("⚠️ REDIS_URL not set — notifications will send immediately");
 }
 
 // ---------- Nodemailer ----------
@@ -125,16 +133,10 @@ const transporter = nodemailer.createTransport({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---------- Static pages ----------
-app.get("/", (req, res) =>
-  res.sendFile(path.join(__dirname, "public", "index.html"))
-);
-app.get("/schedule", (req, res) =>
-  res.sendFile(path.join(__dirname, "public", "schedule.html"))
-);
-app.use(express.static(path.join(__dirname, "public"), { index: false }));
+// ---------- File Upload ----------
+const upload = multer({ dest: path.join(__dirname, "uploads/") });
 
-// ---------- Auth ----------
+// ---------- Auth middleware ----------
 async function authenticateFirebase(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -151,91 +153,129 @@ async function authenticateFirebase(req, res, next) {
   }
 }
 
-// ---------- Schedule route ----------
-app.post("/schedule", authenticateFirebase, async (req, res) => {
-  const { to, subject, body, datetime, timezone } = req.body;
-  if (!to || !subject || !body || !datetime || !timezone) {
-    return res.status(400).json({ error: "❌ Missing fields" });
-  }
-  if (!Intl.supportedValuesOf("timeZone").includes(timezone)) {
-    return res.status(400).json({ error: "❌ Invalid timezone" });
-  }
-
-  let scheduledTime;
-  try {
-    scheduledTime = zonedTimeToUtc(datetime, timezone);
-  } catch {
-    return res.status(400).json({ error: "❌ Invalid datetime" });
-  }
-
-  const delayMs = scheduledTime.getTime() - Date.now();
-  if (delayMs < 0) {
-    return res.status(400).json({ error: "❌ Date is in the past" });
-  }
-
-  const emailJob = await EmailJob.create({
-    to,
-    subject,
-    body,
-    datetime: scheduledTime,
-    originalLocalTime: datetime,
-    timezone,
-    status: "scheduled",
-    userId: req.user.uid,
-  });
-
-  if (emailQueue) {
+// ---------- API: Schedule Notification ----------
+app.post(
+  "/api/schedule",
+  authenticateFirebase,
+  upload.single("file"),
+  async (req, res) => {
     try {
-      await emailQueue.add(
-        "sendEmail",
-        { to, subject, body, emailJobId: emailJob._id.toString() },
-        {
-          id: emailJob._id.toString(),
-          delay: delayMs,
-          attempts: 3,
-          backoff: { type: "exponential", delay: 2000 },
+      const data = req.body.data ? JSON.parse(req.body.data) : req.body;
+      const { to, subject, body, datetime, timezone, method = "email" } = data;
+
+      if (!to || !body || !datetime || !timezone) {
+        return res.status(400).json({ error: "❌ Missing fields" });
+      }
+      if (!Intl.supportedValuesOf("timeZone").includes(timezone)) {
+        return res.status(400).json({ error: "❌ Invalid timezone" });
+      }
+
+      let scheduledTime;
+      try {
+        scheduledTime = zonedTimeToUtc(datetime, timezone);
+      } catch {
+        return res.status(400).json({ error: "❌ Invalid datetime" });
+      }
+
+      const delayMs = scheduledTime.getTime() - Date.now();
+      if (delayMs < 0) {
+        return res.status(400).json({ error: "❌ Date is in the past" });
+      }
+
+      const attachment =
+        req.file && method === "email"
+          ? { filename: req.file.originalname, path: req.file.path }
+          : undefined;
+
+      const emailJob = await EmailJob.create({
+        to,
+        subject: method === "email" ? subject : undefined,
+        body,
+        datetime: scheduledTime,
+        originalLocalTime: datetime,
+        timezone,
+        status: "scheduled",
+        userId: req.user.uid,
+        method,
+        attachment,
+      });
+
+      if (emailQueue) {
+        await emailQueue.add(
+          "sendNotification",
+          {
+            method,
+            to,
+            subject,
+            body,
+            emailJobId: emailJob._id.toString(),
+            attachment,
+          },
+          {
+            id: emailJob._id.toString(),
+            delay: delayMs,
+            attempts: 3,
+            backoff: { type: "exponential", delay: 2000 },
+          }
+        );
+      } else {
+        // fallback immediate send
+        if (method === "email") {
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to,
+            subject,
+            text: body,
+            attachments: attachment ? [attachment] : [],
+          });
         }
-      );
+      }
+
+      const localTime = utcToZonedTime(scheduledTime, timezone);
       return res.json({
-        message: `✅ Email scheduled for ${scheduledTime.toLocaleString()} (${timezone})`,
+        message: `✅ ${method.toUpperCase()} scheduled for ${format(
+          localTime,
+          "yyyy-MM-dd HH:mm:ss zzz",
+          { timeZone: timezone }
+        )}`,
         jobId: emailJob._id.toString(),
       });
     } catch (err) {
-      console.error("❌ Queue failed:", err.message);
+      console.error("❌ Schedule error:", err.message);
+      return res.status(500).json({ error: "❌ Server error: " + err.message });
     }
   }
+);
 
-  // Fallback: send immediately
+// ---------- API: Logout ----------
+app.post("/api/logout", authenticateFirebase, async (req, res) => {
   try {
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to,
-      subject,
-      text: body,
-    });
-    console.log("✅ Fallback email sent:", info.messageId);
-    await EmailJob.findByIdAndUpdate(emailJob._id, {
-      status: "sent",
-      sentAt: new Date(),
-    });
-    return res.json({
-      message: "✅ Email sent immediately (fallback)",
-      jobId: emailJob._id.toString(),
-    });
+    await admin.auth().revokeRefreshTokens(req.user.uid);
+    console.log(`👤 User ${req.user.uid} logged out and tokens revoked`);
+    res.json({ message: "✅ Logged out (tokens revoked)" });
   } catch (err) {
-    console.error("❌ Fallback failed:", err.message);
-    await EmailJob.findByIdAndUpdate(emailJob._id, {
-      status: "failed",
-      error: err.message,
-    });
-    return res.status(500).json({ error: "❌ Failed to send: " + err.message });
+    console.error("❌ Logout error:", err.message);
+    res.status(500).json({ error: "❌ Failed to logout" });
   }
 });
 
-// ---------- Logout ----------
-app.post("/logout", authenticateFirebase, (req, res) => {
-  console.log(`👤 User ${req.user.uid} logged out`);
-  res.json({ message: "✅ Logged out" });
+// ---------- Static pages ----------
+app.get("/", (req, res) =>
+  res.sendFile(path.join(__dirname, "public", "index.html"))
+);
+app.get("/schedule", (req, res) =>
+  res.sendFile(path.join(__dirname, "public", "schedule.html"))
+);
+app.use(express.static(path.join(__dirname, "public"), { index: false }));
+
+// ---------- Global Error Handler ----------
+app.use((err, req, res, next) => {
+  console.error("❌ Unhandled error:", err);
+  if (req.path.startsWith("/api")) {
+    res.status(500).json({ error: "❌ Unexpected server error" });
+  } else {
+    res.status(500).send("Internal Server Error");
+  }
 });
 
 // ---------- Start ----------

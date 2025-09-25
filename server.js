@@ -286,6 +286,23 @@ app.post(
   }
 );
 
+// ---------- API: Get Jobs for current user ----------
+app.get("/api/jobs", authenticateFirebase, async (req, res) => {
+  try {
+    const jobs = await EmailJob.find({ userId: req.user.uid }).sort({ datetime: 1 });
+
+    const counts = {
+      email: jobs.filter(j => j.method === "email" && j.status === "scheduled").length,
+      sms: jobs.filter(j => j.method === "sms" && j.status === "scheduled").length,
+    };
+
+    res.json({ jobs, counts });
+  } catch (err) {
+    console.error("❌ Fetch jobs error:", err.message);
+    res.status(500).json({ error: "Failed to fetch jobs" });
+  }
+});
+
 // ---------- API: Logout ----------
 app.post("/api/logout", authenticateFirebase, async (req, res) => {
   try {

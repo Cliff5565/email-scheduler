@@ -28,7 +28,7 @@ body {
   flex-direction:column;
   padding:20px 0;
   transition: width 0.3s; /* Smooth transition for collapse */
-  position: relative; /* Ensure toggle button positions relative to this */
+  position: relative; /* Ensure toggle button can be positioned relative to this if needed */
   z-index: 10; /* Ensure sidebar is above main content during collapse */
 }
 .sidebar h2 {
@@ -56,15 +56,15 @@ body {
   cursor:pointer;
 }
 
-/* Toggle button - Positioned in top-left corner */
+/* Toggle button - Positioned to the LEFT of the EXPANDED sidebar */
 .toggle-btn {
   position: absolute;
   top: 15px;
-  left: 15px; /* Changed from 230px to 15px */
+  left: 230px; /* Position it to the right of the expanded sidebar (220px width + some padding) */
   background: #4a4aff;
   color: white;
   border: none;
-  border-radius: 5px; /* Rounded all corners */
+  border-radius: 0 5px 5px 0; /* Rounded on the right side only */
   padding: 8px 10px;
   cursor: pointer;
   z-index: 101; /* Ensure it's above both sidebar and main content */
@@ -72,9 +72,8 @@ body {
 }
 
 /* Adjust toggle button position when sidebar is collapsed */
-.sidebar.collapsed ~ .main .toggle-btn,
-.sidebar.collapsed .toggle-btn { /* Adjust selector if button is inside sidebar */
-  left: 15px; /* Keep it in the corner when sidebar collapses */
+.sidebar.collapsed ~ .main .toggle-btn {
+  left: 60px; /* Position it to the right of the collapsed sidebar (60px width) */
 }
 
 /* Collapsed sidebar */
@@ -165,10 +164,12 @@ body {
 </head>
 <body>
 
+<!-- Toggle button - MOVED OUTSIDE the sidebar div -->
+<button class="toggle-btn" id="toggleSidebar">☰</button>
+
 <!-- Sidebar -->
 <div class="sidebar" id="sidebar">
-  <!-- Toggle button moved inside the sidebar -->
-  <button class="toggle-btn" id="toggleSidebar">☰</button>
+  <!-- Removed the toggle button from here -->
   <h2>Scheduler</h2>
   <a href="/dashboard.html" class="active"><span>📊 Dashboard</span></a> <!-- Wrapped text in <span> -->
   <a href="/schedule"><span>⏰ Schedule</span></a> <!-- Wrapped text in <span> -->
@@ -185,10 +186,10 @@ body {
       <h2 id="emailCount">0</h2>
       <p>Emails Scheduled</p>
     </div>
-    <div class="card">
-      <h2 id="smsCount">0</h2>
-      <p>SMS Scheduled</p>
-    </div>
+  <div class="card">
+    <h2 id="smsCount">0</h2>
+    <p>SMS Scheduled</p>
+  </div>
   </div>
 
   <!-- Calendar -->

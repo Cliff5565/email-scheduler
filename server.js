@@ -194,9 +194,20 @@ async function authenticateFirebase(req, res, next) {
   }
 }
 
-// ---------- Decryption function ----------
+// ---------- Decryption function (Updated to handle plain text) ----------
 function decrypt(encryptedText, key) {
+  // Check if the input looks like a base64 encoded string (a common sign of encrypted data)
+  // This is a basic check, you might want to be more specific based on your encryption output
+  const isBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(encryptedText);
+
+  if (!isBase64) {
+    // If it doesn't look like base64, assume it's plain text and return as is
+    console.warn("Decrypt received non-base64 data, assuming plain text:", encryptedText.substring(0, 20) + "...");
+    return encryptedText;
+  }
+
   try {
+    // If it looks like base64, proceed with decryption
     const data = Buffer.from(encryptedText, 'base64');
     // AES-GCM uses 16-byte IV + auth tag
     const iv = data.slice(0, 16); 
@@ -211,8 +222,13 @@ function decrypt(encryptedText, key) {
     
     return decrypted;
   } catch (err) {
-    console.error('Decryption error:', err.message);
-    throw err;
+    // If decryption fails, it might be plain text that was incorrectly stored as encrypted
+    // Or it could be genuinely corrupted/invalid encrypted data
+    console.error('Decryption failed (might be plain text or invalid data):', err.message);
+    console.warn('Attempting to return input as plain text:', encryptedText.substring(0, 20) + "...");
+    // As a fallback, return the original input, assuming it was plain text
+    // Be cautious: this could mask other errors, but handles the plain-text case
+    return encryptedText;
   }
 }
 

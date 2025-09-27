@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Custom Registration</title>
+  <title>Email Scheduler Login</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -14,7 +14,7 @@
       height: 100vh;
       margin: 0;
     }
-    .register-box {
+    .login-box {
       background: white;
       border-radius: 12px;
       padding: 30px;
@@ -23,7 +23,7 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       text-align: center;
     }
-    .register-box h2 { margin-bottom: 10px; }
+    .login-box h2 { margin-bottom: 10px; }
     .input {
       width: 100%; margin-bottom: 15px; padding: 12px;
       border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
@@ -42,22 +42,20 @@
     .icon { width: 18px; height: 18px; display: inline-block; }
     small { display: block; margin-top: 15px; }
     a { color: #4a4aff; cursor: pointer; text-decoration: none; }
-    .error { color: #ff4d4d; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <div class="register-box">
-    <h2>Register Account</h2>
-    <p>Create your account to access the scheduler</p>
+  <div class="login-box">
+    <h2>Email Scheduler</h2>
+    <p id="formTitle">Login to access your dashboard</p>
 
     <input type="email" id="email" class="input" placeholder="Email address" />
     <input type="password" id="password" class="input" placeholder="Password" />
-    <input type="password" id="confirmPassword" class="input" placeholder="Confirm Password" />
-    <button class="btn btn-primary" onclick="handleRegister()" id="registerBtn">Register</button>
+    <button class="btn btn-primary" onclick="handleLogin()" id="submitBtn">Login</button>
 
     <small>
-      <span>Already have an account?</span> 
-      <a href="/">Login</a>
+      <span>Don't have an account?</span> 
+      <a href="/register">Register</a>
     </small>
 
     <hr/>
@@ -127,7 +125,6 @@
     </button>
 
     <small id="status"></small>
-    <div id="error" class="error"></div>
   </div>
 
   <!-- Firebase SDKs -->
@@ -148,44 +145,19 @@
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
-    async function handleRegister() {
+    async function handleLogin() {
       const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-      const confirmPassword = document.getElementById("confirmPassword").value;
-      
-      // Validation
-      if (!email || !password || !confirmPassword) {
-        document.getElementById("error").innerText = "All fields are required";
-        return;
-      }
-      
-      if (password !== confirmPassword) {
-        document.getElementById("error").innerText = "Passwords do not match";
-        return;
-      }
-      
-      if (password.length < 6) {
-        document.getElementById("error").innerText = "Password must be at least 6 characters";
-        return;
-      }
-      
+      const pass = document.getElementById("password").value;
       try {
-        // Create user with Firebase
-        const userCred = await auth.createUserWithEmailAndPassword(email, password);
-        
-        // Send email verification
-        await userCred.user.sendEmailVerification();
-        
-        // Show success message
-        document.getElementById("status").innerText = "Registration successful! Verification email sent.";
-        document.getElementById("error").innerText = "";
-        
-        // Redirect after delay
-        setTimeout(() => {
-          window.location.href = "/";
-        }, 2000);
+        const userCred = await auth.signInWithEmailAndPassword(email, pass);
+        document.getElementById("status").innerText = "Logged in as " + userCred.user.email;
+        // send token to backend
+        const token = await userCred.user.getIdToken();
+        localStorage.setItem("idToken", token);
+        // Redirect to dashboard or schedule page after successful login
+        window.location.href = "/schedule";
       } catch (err) {
-        document.getElementById("error").innerText = err.message;
+        document.getElementById("status").innerText = err.message;
       }
     }
 
@@ -196,7 +168,7 @@
         document.getElementById("status").innerText = "Google login: " + result.user.displayName;
         const token = await result.user.getIdToken();
         localStorage.setItem("idToken", token);
-        window.location.href = "/dashboard.html";
+        window.location.href = "/schedule";
       } catch (err) {
         document.getElementById("status").innerText = err.message;
       }
@@ -209,7 +181,7 @@
         document.getElementById("status").innerText = "Facebook login: " + result.user.displayName;
         const token = await result.user.getIdToken();
         localStorage.setItem("idToken", token);
-        window.location.href = "/dashboard.html";
+        window.location.href = "/schedule";
       } catch (err) {
         document.getElementById("status").innerText = err.message;
       }
@@ -222,11 +194,24 @@
         document.getElementById("status").innerText = "Apple login: " + result.user.displayName;
         const token = await result.user.getIdToken();
         localStorage.setItem("idToken", token);
-        window.location.href = "/dashboard.html";
+        window.location.href = "/schedule";
       } catch (err) {
         document.getElementById("status").innerText = err.message;
       }
     }
+
+    // ✅ Monitor login
+    auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        console.log("Auth state changed: user logged in", user.email);
+        // refresh token each state change
+        const token = await user.getIdToken();
+        localStorage.setItem("idToken", token);
+        window.location.href = "/schedule";
+      } else {
+        console.log("❌ No user signed in");
+      }
+    });
   </script>
 </body>
 </html>

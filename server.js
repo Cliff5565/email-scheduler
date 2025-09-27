@@ -610,8 +610,8 @@ app.post("/api/logout", authenticateFirebase, async (req, res) => {
 });
 
 // ---------- Static pages ----------
-app.get("/", (req, res) => // Changed to serve login.html
-  res.sendFile(path.join(__dirname, "public", "login.html"))
+app.get("/", (req, res) =>
+  res.sendFile(path.join(__dirname, "public", "index.html")) // Changed from login.html to index.html
 );
 app.get("/register", (req, res) => // Added route for register page
   res.sendFile(path.join(__dirname, "public", "register.html"))
@@ -619,7 +619,7 @@ app.get("/register", (req, res) => // Added route for register page
 app.get("/schedule", (req, res) =>
   res.sendFile(path.join(__dirname, "public", "schedule.html"))
 );
-app.use(express.static(path.join(__dirname, "public"), { index: false }));
+app.use(express.static(path.join(__dirname, "public"), { index: false })); // Ensure static middleware doesn't interfere with root route
 
 // ---------- Global Error Handler ----------
 app.use((err, req, res, next) => {

@@ -610,8 +610,8 @@ app.post("/api/logout", authenticateFirebase, async (req, res) => {
 });
 
 // ---------- Static pages ----------
-app.get("/", (req, res) =>
-  res.sendFile(path.join(__dirname, "public", "index.html"))
+app.get("/", (req, res) => // Changed to serve login.html
+  res.sendFile(path.join(__dirname, "public", "login.html"))
 );
 app.get("/register", (req, res) => // Added route for register page
   res.sendFile(path.join(__dirname, "public", "register.html"))

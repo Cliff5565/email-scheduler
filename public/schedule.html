@@ -592,14 +592,18 @@ document.getElementById('scheduleForm').addEventListener('submit', async (e) => 
         // Update existing job
         res = await fetch(`/api/jobs/${jobId}`, {
           method: 'PUT',
-          headers: { Authorization: `Bearer ${idToken}` },
+          headers: { // <--- CORRECTED: Removed Content-Type header
+            'Authorization': `Bearer ${idToken}`
+          },
           body: formData
         });
       } else {
         // Create new job
         res = await fetch('/api/schedule', {
           method: 'POST',
-          headers: { Authorization: `Bearer ${idToken}` },
+          headers: { // <--- CORRECTED: Removed Content-Type header
+            'Authorization': `Bearer ${idToken}`
+          },
           body: formData
         });
       }

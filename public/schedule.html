@@ -12,6 +12,7 @@ body {
   padding: 0;
   display: flex;
   height: 100vh;
+  overflow: hidden; /* Prevent scrollbars during transition */
 }
 
 /* Sidebar */
@@ -23,6 +24,8 @@ body {
   flex-direction:column;
   padding:20px 0;
   transition: width 0.3s;
+  position: relative; /* Ensure toggle button can be positioned relative to this if needed */
+  z-index: 10; /* Ensure sidebar is above main content during collapse */
 }
 .sidebar h2 {
   text-align:center;
@@ -49,18 +52,24 @@ body {
   cursor:pointer;
 }
 
-/* Toggle button */
+/* Toggle button - Positioned to the LEFT of the EXPANDED sidebar */
 .toggle-btn {
   position: absolute;
   top: 15px;
-  left: 230px;
+  left: 230px; /* Position it to the right of the expanded sidebar (220px width + some padding) */
   background: #4a4aff;
   color: white;
   border: none;
-  border-radius: 0 5px 5px 0;
+  border-radius: 0 5px 5px 0; /* Rounded on the right side only */
   padding: 8px 10px;
   cursor: pointer;
-  z-index: 100;
+  z-index: 101; /* Ensure it's above both sidebar and main content */
+  transition: left 0.3s; /* Smooth transition when sidebar collapses */
+}
+
+/* Adjust toggle button position when sidebar is collapsed */
+.sidebar.collapsed ~ .main .toggle-btn {
+  left: 60px; /* Position it to the right of the collapsed sidebar (60px width) */
 }
 
 /* Collapsed sidebar */
@@ -87,6 +96,7 @@ body {
   padding:20px;
   overflow-y:auto;
   transition: margin-left 0.3s;
+  position: relative; /* Ensure it can contain the toggle button if needed */
 }
 
 .main.shifted {
@@ -208,11 +218,13 @@ button.submit-btn:disabled {
 </style>
 </head>
 <body>
-<!-- Toggle button -->
+
+<!-- Toggle button - MOVED OUTSIDE the sidebar div -->
 <button class="toggle-btn" id="toggleSidebar">☰</button>
 
 <!-- Sidebar -->
 <div class="sidebar" id="sidebar">
+  <!-- Removed the toggle button from here -->
   <h2>Scheduler</h2>
   <a href="/dashboard.html"><span>📊 Dashboard</span></a>
   <a href="/schedule" class="active"><span>⏰ Schedule</span></a>

@@ -6,8 +6,8 @@
 <title>📊 Dashboard</title>
 
 <!-- FullCalendar -->
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css" rel="stylesheet"/>
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/main.min.css " rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js "></script>
 
 <style>
 body {
@@ -16,6 +16,7 @@ body {
   margin:0; padding:0;
   display:flex;
   height:100vh;
+  overflow: hidden; /* Prevent scrollbars during transition */
 }
 
 /* Sidebar */
@@ -26,6 +27,9 @@ body {
   display:flex;
   flex-direction:column;
   padding:20px 0;
+  transition: width 0.3s; /* Smooth transition for collapse */
+  position: relative; /* Ensure toggle button positions relative to this */
+  z-index: 10; /* Ensure sidebar is above main content during collapse */
 }
 .sidebar h2 {
   text-align:center;
@@ -52,10 +56,55 @@ body {
   cursor:pointer;
 }
 
+/* Toggle button - Positioned in top-left corner */
+.toggle-btn {
+  position: absolute;
+  top: 15px;
+  left: 15px; /* Changed from 230px to 15px */
+  background: #4a4aff;
+  color: white;
+  border: none;
+  border-radius: 5px; /* Rounded all corners */
+  padding: 8px 10px;
+  cursor: pointer;
+  z-index: 101; /* Ensure it's above both sidebar and main content */
+  transition: left 0.3s; /* Smooth transition when sidebar collapses */
+}
+
+/* Adjust toggle button position when sidebar is collapsed */
+.sidebar.collapsed ~ .main .toggle-btn,
+.sidebar.collapsed .toggle-btn { /* Adjust selector if button is inside sidebar */
+  left: 15px; /* Keep it in the corner when sidebar collapses */
+}
+
+/* Collapsed sidebar */
+.sidebar.collapsed {
+  width: 60px;
+}
+.sidebar.collapsed h2,
+.sidebar.collapsed a span, /* Assuming links use <span> for text */
+.sidebar.collapsed button span { /* Assuming button uses <span> for text */
+  display: none; /* Hide text when collapsed */
+}
+.sidebar.collapsed a {
+  text-align: center;
+  padding: 15px 0; /* Adjust padding for centering */
+}
+.sidebar.collapsed button {
+  margin: 15px 10px; /* Adjust margin */
+  padding: 10px; /* Adjust padding */
+}
+
 .main {
   flex:1;
   padding:20px;
   overflow-y:auto;
+  transition: margin-left 0.3s; /* Smooth transition when sidebar collapses */
+  position: relative; /* Ensure it can contain the toggle button if needed */
+}
+
+.main.shifted { /* Class to shift main content when sidebar is collapsed */
+  margin-left: 60px; /* Match the collapsed sidebar width */
 }
 
 /* Summary cards */
@@ -102,6 +151,7 @@ body {
   display:none; position:fixed; top:0; left:0; right:0; bottom:0;
   background:rgba(0,0,0,0.5);
   justify-content:center; align-items:center;
+  z-index: 1000; /* Ensure modal is above everything */
 }
 .modal-content {
   background:#fff; padding:20px; border-radius:8px; max-width:400px; width:90%;
@@ -114,16 +164,19 @@ body {
 </style>
 </head>
 <body>
+
 <!-- Sidebar -->
-<div class="sidebar">
+<div class="sidebar" id="sidebar">
+  <!-- Toggle button moved inside the sidebar -->
+  <button class="toggle-btn" id="toggleSidebar">☰</button>
   <h2>Scheduler</h2>
-  <a href="/dashboard.html" class="active">📊 Dashboard</a>
-  <a href="/schedule">⏰ Schedule</a>
-  <button id="logoutBtn">Logout</button>
+  <a href="/dashboard.html" class="active"><span>📊 Dashboard</span></a> <!-- Wrapped text in <span> -->
+  <a href="/schedule"><span>⏰ Schedule</span></a> <!-- Wrapped text in <span> -->
+  <button id="logoutBtn"><span>Logout</span></button> <!-- Wrapped text in <span> -->
 </div>
 
 <!-- Main content -->
-<div class="main">
+<div class="main" id="main">
   <h1>📊 Dashboard</h1>
 
   <!-- Summary -->
@@ -162,8 +215,8 @@ body {
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js ";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js ";
 
 // Firebase Config (same as login)
 const firebaseConfig = {
@@ -285,6 +338,15 @@ document.getElementById("logoutBtn").addEventListener("click",async()=>{
   await signOut(auth);
   window.location.href="/";
 });
+
+// --- Sidebar Toggle Functionality ---
+document.getElementById('toggleSidebar').addEventListener('click', ()=>{
+  const sidebar = document.getElementById('sidebar');
+  const main = document.getElementById('main');
+  sidebar.classList.toggle('collapsed');
+  main.classList.toggle('shifted');
+});
+// --- End Sidebar Toggle ---
 </script>
 </body>
 </html>

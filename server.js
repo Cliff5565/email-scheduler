@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import IORedis from "ioredis";
 import { zonedTimeToUtc, utcToZonedTime, format } from "date-fns-tz";
 import fs from "fs";
-import { EmailJob } from "./models/EmailJob.js";
+import { EmailJob } from "./models/EmailJob.js"; // Ensure this path is correct
 import admin from "firebase-admin";
 import multer from "multer";
 import twilio from "twilio";
@@ -31,7 +31,7 @@ const requiredEnv = [
   "FIREBASE_PROJECT_ID",
   "FIREBASE_CLIENT_EMAIL",
   "FIREBASE_PRIVATE_KEY",
-  "PROVIDER_KEY",
+  "PROVIDER_KEY", // Added PROVIDER_KEY
   "TWILIO_ACCOUNT_SID",
   "TWILIO_AUTH_TOKEN",
   "TWILIO_WHATSAPP_NUMBER"
@@ -127,7 +127,7 @@ if (process.env.REDIS_URL) {
           if (twilioClient) {
             const message = await twilioClient.messages.create({
               body: body,
-              from: process.env.TWILIO_PHONE_NUMBER || "MGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+              from: process.env.TWILIO_PHONE_NUMBER || "MGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // Fallback if not set
               to: to,
             });
             console.log(`✅ SMS sent (job): ${message.sid} to ${to}`);
@@ -198,11 +198,13 @@ async function authenticateFirebase(req, res, next) {
 function decrypt(encryptedText, key) {
   try {
     const data = Buffer.from(encryptedText, 'base64');
-    const iv = data.slice(0, 16); // 16 bytes for AES-GCM IV
-    const encryptedData = data.slice(16);
+    // AES-GCM uses 16-byte IV + auth tag
+    const iv = data.slice(0, 16); 
+    const encryptedData = data.slice(16, -16); // Exclude auth tag from encrypted data
+    const authTag = data.slice(-16); // Auth tag is at the end
     
     const decipher = createDecipheriv('aes-128-gcm', key.slice(0, 16), iv);
-    decipher.setAuthTag(data.slice(-16));
+    decipher.setAuthTag(authTag); // Set the authentication tag
     
     let decrypted = decipher.update(encryptedData, null, 'utf8');
     decrypted += decipher.final('utf8');
@@ -218,7 +220,7 @@ function decrypt(encryptedText, key) {
 app.post(
   "/api/schedule",
   authenticateFirebase,
-  upload.single("file"),
+  upload.single("file"), // Handle file upload
   async (req, res) => {
     try {
       const data = req.body.data ? JSON.parse(req.body.data) : req.body;
@@ -249,9 +251,9 @@ app.post(
         }
       }
 
-      // Validate WhatsApp number format
+      // Validate WhatsApp number format (specific check if needed)
       if (method === "whatsapp") {
-        // Ensure the number starts with country code
+        // Additional validation if required, e.g., ensuring it starts with +
         if (!/^\+/.test(decryptedTo)) {
           return res.status(400).json({
             error: "❌ WhatsApp number must start with country code (e.g., +1234567890)",
@@ -271,10 +273,10 @@ app.post(
         return res.status(400).json({ error: "❌ Date is in the past" });
       }
 
-      const attachment =
-        req.file && method === "email"
-          ? { filename: req.file.originalname, path: req.file.path }
-          : undefined;
+      // Handle file attachment
+      const attachment = req.file && method === "email" // Only for email
+        ? { filename: req.file.originalname, path: req.file.path }
+        : undefined;
 
       const emailJob = await EmailJob.create({
         to: decryptedTo, // Store decrypted value in DB
@@ -286,7 +288,7 @@ app.post(
         status: "scheduled",
         userId: req.user.uid,
         method,
-        attachment,
+        attachment, // Store attachment info
       });
 
       if (emailQueue) {
@@ -298,7 +300,7 @@ app.post(
             subject: decryptedSubject,
             body: decryptedBody,
             emailJobId: emailJob._id.toString(),
-            attachment,
+            attachment, // Pass attachment to queue
           },
           {
             id: emailJob._id.toString(),
@@ -401,65 +403,35 @@ app.get("/api/jobs", authenticateFirebase, async (req, res) => {
   }
 });
 
-// ---------- API: Cancel Job ----------
-app.delete("/api/jobs/:id", authenticateFirebase, async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Find the job
-    const job = await EmailJob.findById(id);
-    if (!job) {
-      return res.status(404).json({ error: "Job not found" });
-    }
-    
-    // Check if user owns the job
-    if (job.userId !== req.user.uid) {
-      return res.status(403).json({ error: "Not authorized to cancel this job" });
-    }
-    
-    // Cancel the job in the queue if it exists
-    if (emailQueue) {
-      await emailQueue.remove(id);
-    }
-    
-    // Update job status
-    await EmailJob.findByIdAndUpdate(id, { status: "cancelled" });
-    
-    res.json({ message: "Job cancelled successfully" });
-  } catch (err) {
-    console.error("❌ Cancel job error:", err.message);
-    res.status(500).json({ error: "Failed to cancel job" });
-  }
-});
-
 // ---------- API: Update Job ----------
-app.put("/api/jobs/:id", authenticateFirebase, async (req, res) => {
+app.put("/api/jobs/:id", authenticateFirebase, upload.single("file"), async (req, res) => {
   try {
     const { id } = req.params;
-    const { datetime, timezone, subject, body } = req.body;
-    
+    const data = req.body.data ? JSON.parse(req.body.data) : req.body; // Handle multipart/form-data for file
+    const { datetime, timezone, subject, body } = data;
+
     // Find the job
     const job = await EmailJob.findById(id);
     if (!job) {
       return res.status(404).json({ error: "Job not found" });
     }
-    
+
     // Check if user owns the job
     if (job.userId !== req.user.uid) {
       return res.status(403).json({ error: "Not authorized to update this job" });
     }
-    
-    // Check if job is already sent
+
+    // Check if job is already sent or cancelled
     if (job.status !== "scheduled") {
       return res.status(400).json({ error: "Cannot update a job that is already sent or cancelled" });
     }
-    
-    // Validate timezone
+
+    // Validate timezone if provided
     if (timezone && !Intl.supportedValuesOf("timeZone").includes(timezone)) {
       return res.status(400).json({ error: "❌ Invalid timezone" });
     }
-    
-    // Validate datetime
+
+    // Validate datetime if provided
     let newScheduledTime;
     if (datetime) {
       try {
@@ -467,17 +439,44 @@ app.put("/api/jobs/:id", authenticateFirebase, async (req, res) => {
       } catch {
         return res.status(400).json({ error: "❌ Invalid datetime" });
       }
-      
+
       const delayMs = newScheduledTime.getTime() - Date.now();
       if (delayMs < 0) {
         return res.status(400).json({ error: "❌ Date is in the past" });
       }
     }
-    
+
+    // Handle file attachment for updates
+    let updatedAttachment = job.attachment; // Keep existing attachment if no new one is provided
+    if (req.file && job.method === "email") { // Only process file if method is email and file is provided
+      // Delete old file if it exists
+      if (job.attachment && job.attachment.path) {
+        try {
+          await fs.promises.unlink(job.attachment.path);
+        } catch (unlinkErr) {
+          console.error("Error deleting old attachment:", unlinkErr);
+          // Continue even if deletion fails
+        }
+      }
+      // Set new attachment
+      updatedAttachment = { filename: req.file.originalname, path: req.file.path };
+    } else if (req.body.removeAttachment === "true" && job.attachment) { // Example: if frontend sends removeAttachment=true
+      // Delete old file
+      if (job.attachment.path) {
+        try {
+          await fs.promises.unlink(job.attachment.path);
+        } catch (unlinkErr) {
+          console.error("Error deleting attachment:", unlinkErr);
+          // Continue even if deletion fails
+        }
+      }
+      updatedAttachment = undefined; // Remove attachment
+    }
+
     // Update job in the queue if it exists
     if (emailQueue) {
       await emailQueue.remove(id);
-      
+
       // Add updated job to queue
       await emailQueue.add(
         "sendNotification",
@@ -487,6 +486,7 @@ app.put("/api/jobs/:id", authenticateFirebase, async (req, res) => {
           subject: job.method === "email" ? (subject || job.subject) : undefined,
           body: body || job.body,
           emailJobId: id,
+          attachment: updatedAttachment, // Pass updated attachment
         },
         {
           id: id,
@@ -496,7 +496,7 @@ app.put("/api/jobs/:id", authenticateFirebase, async (req, res) => {
         }
       );
     }
-    
+
     // Update job in database
     const updatedJob = await EmailJob.findByIdAndUpdate(
       id,
@@ -506,14 +506,56 @@ app.put("/api/jobs/:id", authenticateFirebase, async (req, res) => {
         timezone: timezone || job.timezone,
         subject: job.method === "email" ? (subject || job.subject) : undefined,
         body: body || job.body,
+        attachment: updatedAttachment, // Update attachment field
       },
-      { new: true }
+      { new: true } // Return the updated document
     );
-    
+
     res.json({ message: "Job updated successfully", job: updatedJob });
   } catch (err) {
     console.error("❌ Update job error:", err.message);
     res.status(500).json({ error: "Failed to update job" });
+  }
+});
+
+// ---------- API: Cancel Job ----------
+app.delete("/api/jobs/:id", authenticateFirebase, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find the job
+    const job = await EmailJob.findById(id);
+    if (!job) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
+    // Check if user owns the job
+    if (job.userId !== req.user.uid) {
+      return res.status(403).json({ error: "Not authorized to cancel this job" });
+    }
+
+    // Cancel the job in the queue if it exists
+    if (emailQueue) {
+      await emailQueue.remove(id);
+    }
+
+    // Delete the attachment file if it exists
+    if (job.attachment && job.attachment.path) {
+      try {
+        await fs.promises.unlink(job.attachment.path);
+      } catch (unlinkErr) {
+        console.error("Error deleting attachment file:", unlinkErr);
+        // Continue even if deletion fails
+      }
+    }
+
+    // Update job status to cancelled
+    await EmailJob.findByIdAndUpdate(id, { status: "cancelled" });
+
+    res.json({ message: "Job cancelled successfully" });
+  } catch (err) {
+    console.error("❌ Cancel job error:", err.message);
+    res.status(500).json({ error: "Failed to cancel job" });
   }
 });
 
@@ -533,7 +575,7 @@ app.post("/api/logout", authenticateFirebase, async (req, res) => {
 app.get("/", (req, res) =>
   res.sendFile(path.join(__dirname, "public", "index.html"))
 );
-app.get("/register", (req, res) =>
+app.get("/register", (req, res) => // Added route for register page
   res.sendFile(path.join(__dirname, "public", "register.html"))
 );
 app.get("/schedule", (req, res) =>

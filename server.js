@@ -223,6 +223,7 @@ app.post(
   upload.single("file"), // Handle file upload
   async (req, res) => {
     try {
+      // Handle multipart data (file upload) vs JSON
       const data = req.body.data ? JSON.parse(req.body.data) : req.body;
       const { to, subject, body, datetime, timezone, method = "email" } = data;
 
@@ -407,7 +408,23 @@ app.get("/api/jobs", authenticateFirebase, async (req, res) => {
 app.put("/api/jobs/:id", authenticateFirebase, upload.single("file"), async (req, res) => {
   try {
     const { id } = req.params;
-    const data = req.body.data ? JSON.parse(req.body.data) : req.body; // Handle multipart/form-data for file
+
+    // Handle multipart data (file upload) vs JSON
+    let data;
+    if (req.file || req.body.data) {
+      // If multipart, req.body.data is a string
+      if (typeof req.body.data === 'string') {
+        data = JSON.parse(req.body.data);
+      } else {
+        // If it's not multipart but still has body data (like JSON)
+        data = req.body;
+      }
+    } else {
+      // If no file and no body.data, req.body is the data object
+      data = req.body;
+    }
+
+    // Extract fields from the parsed data
     const { datetime, timezone, subject, body } = data;
 
     // Find the job
@@ -446,6 +463,9 @@ app.put("/api/jobs/:id", authenticateFirebase, upload.single("file"), async (req
       }
     }
 
+    // Get provider key for decryption (if needed for new data)
+    const providerKey = process.env.PROVIDER_KEY;
+
     // Handle file attachment for updates
     let updatedAttachment = job.attachment; // Keep existing attachment if no new one is provided
     if (req.file && job.method === "email") { // Only process file if method is email and file is provided
@@ -453,24 +473,30 @@ app.put("/api/jobs/:id", authenticateFirebase, upload.single("file"), async (req
       if (job.attachment && job.attachment.path) {
         try {
           await fs.promises.unlink(job.attachment.path);
+          console.log(`Deleted old attachment: ${job.attachment.path}`);
         } catch (unlinkErr) {
           console.error("Error deleting old attachment:", unlinkErr);
           // Continue even if deletion fails
         }
       }
-      // Set new attachment
+      // Set new attachment - store the original filename and the path where multer saved it
       updatedAttachment = { filename: req.file.originalname, path: req.file.path };
-    } else if (req.body.removeAttachment === "true" && job.attachment) { // Example: if frontend sends removeAttachment=true
-      // Delete old file
-      if (job.attachment.path) {
-        try {
-          await fs.promises.unlink(job.attachment.path);
-        } catch (unlinkErr) {
-          console.error("Error deleting attachment:", unlinkErr);
-          // Continue even if deletion fails
-        }
-      }
-      updatedAttachment = undefined; // Remove attachment
+    }
+    // Note: Logic for removing attachment via form data could be added here if needed
+
+    // Decrypt potentially updated sensitive data if provided in the multipart data
+    let decryptedTo = job.to; // Keep original if not updating
+    let decryptedSubject = job.subject; // Keep original if not updating
+    let decryptedBody = job.body; // Keep original if not updating
+
+    if (data.to) {
+      decryptedTo = decrypt(data.to, providerKey);
+    }
+    if (data.subject) {
+      decryptedSubject = decrypt(data.subject, providerKey);
+    }
+    if (data.body) {
+      decryptedBody = decrypt(data.body, providerKey);
     }
 
     // Update job in the queue if it exists
@@ -482,9 +508,9 @@ app.put("/api/jobs/:id", authenticateFirebase, upload.single("file"), async (req
         "sendNotification",
         {
           method: job.method,
-          to: job.to, // Already decrypted
-          subject: job.method === "email" ? (subject || job.subject) : undefined,
-          body: body || job.body,
+          to: decryptedTo, // Use potentially updated decrypted value
+          subject: job.method === "email" ? decryptedSubject : undefined, // Use potentially updated decrypted value
+          body: decryptedBody, // Use potentially updated decrypted value
           emailJobId: id,
           attachment: updatedAttachment, // Pass updated attachment
         },
@@ -504,9 +530,11 @@ app.put("/api/jobs/:id", authenticateFirebase, upload.single("file"), async (req
         datetime: newScheduledTime || job.datetime,
         originalLocalTime: datetime || job.originalLocalTime,
         timezone: timezone || job.timezone,
-        subject: job.method === "email" ? (subject || job.subject) : undefined,
-        body: body || job.body,
+        subject: job.method === "email" ? decryptedSubject : undefined, // Store decrypted value
+        body: decryptedBody, // Store decrypted value
         attachment: updatedAttachment, // Update attachment field
+        // 'to' is typically not updated, but if it were:
+        // to: decryptedTo
       },
       { new: true } // Return the updated document
     );
@@ -514,6 +542,15 @@ app.put("/api/jobs/:id", authenticateFirebase, upload.single("file"), async (req
     res.json({ message: "Job updated successfully", job: updatedJob });
   } catch (err) {
     console.error("❌ Update job error:", err.message);
+    // Attempt to delete the uploaded file if an error occurred during processing
+    if (req.file && req.file.path) {
+      try {
+        await fs.promises.unlink(req.file.path);
+        console.log(`Deleted uploaded file due to error: ${req.file.path}`);
+      } catch (unlinkErr) {
+        console.error("Error deleting uploaded file after error:", unlinkErr);
+      }
+    }
     res.status(500).json({ error: "Failed to update job" });
   }
 });
@@ -543,6 +580,7 @@ app.delete("/api/jobs/:id", authenticateFirebase, async (req, res) => {
     if (job.attachment && job.attachment.path) {
       try {
         await fs.promises.unlink(job.attachment.path);
+        console.log(`Deleted attachment file: ${job.attachment.path}`);
       } catch (unlinkErr) {
         console.error("Error deleting attachment file:", unlinkErr);
         // Continue even if deletion fails

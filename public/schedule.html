@@ -279,8 +279,8 @@ button.submit-btn:disabled {
 
 <!-- Firebase -->
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js  ";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js  ";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js ";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js ";
 
 // Encryption functions using Web Crypto API
 async function encrypt(text, key) {
@@ -625,7 +625,7 @@ document.getElementById('scheduleForm').addEventListener('submit', async (e) => 
         res = await fetch(`/api/jobs/${jobId}`, {
           method: 'PUT',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json', // <--- OK for JSON
             'Authorization': `Bearer ${idToken}`
           },
           body: JSON.stringify(payload)
@@ -635,7 +635,7 @@ document.getElementById('scheduleForm').addEventListener('submit', async (e) => 
         res = await fetch('/api/schedule', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json', // <--- OK for JSON
             'Authorization': `Bearer ${idToken}`
           },
           body: JSON.stringify(payload)

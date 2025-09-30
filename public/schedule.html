@@ -282,71 +282,75 @@ button.submit-btn:disabled {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js ";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js ";
 
-// Encryption functions using Web Crypto API
+// === AES-256-GCM encryption (Updated functions) ===
 async function encrypt(text, key) {
   const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  
-  // Import the key
+  const rawKey = encoder.encode(key);
+
+  if (rawKey.length !== 32) {
+    throw new Error("PROVIDER_KEY must be 32 bytes (32 ASCII chars).");
+  }
+
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(key),
+    rawKey,
     { name: "AES-GCM" },
     false,
     ["encrypt"]
   );
-  
-  // Generate a random IV
+
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  
-  // Encrypt the data
+
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv },
     cryptoKey,
-    data
+    encoder.encode(text)
   );
-  
-  // Concatenate IV and encrypted data
+
+  // Concatenate IV + encrypted data
   const result = new Uint8Array(iv.length + encrypted.byteLength);
   result.set(iv, 0);
   result.set(new Uint8Array(encrypted), iv.length);
-  
-  // Return as base64 string
+
   return btoa(String.fromCharCode(...result));
 }
 
 async function decrypt(encryptedText, key) {
   const decoder = new TextDecoder();
-  const data = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
-  
-  // Extract IV (first 12 bytes) and encrypted data
-  const iv = data.slice(0, 12);
-  const encryptedData = data.slice(12);
-  
-  // Import the key
+  const rawKey = new TextEncoder().encode(key);
+
+  if (rawKey.length !== 32) {
+    throw new Error("PROVIDER_KEY must be 32 bytes (32 ASCII chars).");
+  }
+
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(key),
+    rawKey,
     { name: "AES-GCM" },
     false,
     ["decrypt"]
   );
-  
-  // Decrypt the data
+
+  const data = Uint8Array.from(atob(encryptedText), (c) => c.charCodeAt(0));
+  const iv = data.slice(0, 12);
+  const encryptedData = data.slice(12);
+
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: iv },
     cryptoKey,
     encryptedData
   );
-  
+
   return decoder.decode(decrypted);
 }
 
-// Get provider key from server or use default
+// Get provider key from server or use default (Must be 32 bytes)
 async function getProviderKey() {
-  // In a real app, this would come from the server
-  // For this example, we'll use a fixed key
-  return "default-provider-key-1234567890";
+  // In a real app, this would come from the server or a secure config
+  // For this example, you need to provide your actual 32-byte key here.
+  // Example: "mySuperSecret32ByteKey12345678"
+  // Ensure this matches the PROVIDER_KEY environment variable on Render exactly.
+  return "your-actual-32-byte-key-here1234"; // Replace this with your 32-byte key
 }
 
 const firebaseConfig = {
@@ -583,13 +587,13 @@ document.getElementById('scheduleForm').addEventListener('submit', async (e) => 
 
   try {
     const idToken = await auth.currentUser.getIdToken();
-    const providerKey = await getProviderKey();
+    const providerKey = await getProviderKey(); // Get the 32-byte key
     
     const payload = {
       method,
-      to: await encrypt(to, providerKey),
+      to: await encrypt(to, providerKey), // Encrypt using new function
       subject: method === "email" ? await encrypt(subject, providerKey) : undefined,
-      body: await encrypt(body, providerKey),
+      body: await encrypt(body, providerKey), // Encrypt using new function
       datetime: localDateTime,
       timezone
     };

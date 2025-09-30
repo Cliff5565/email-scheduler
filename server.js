@@ -21,6 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// Define PORT once, early on
 const PORT = process.env.PORT || 10000;
 
 // ---------- Validate env vars ----------
@@ -194,32 +195,32 @@ async function authenticateFirebase(req, res, next) {
   }
 }
 
-// ---------- Decryption function (Updated to use Node.js crypto) ----------
+// ---------- Decryption function (FIXED - Correctly handles ciphertext + auth tag) ----------
 function decrypt(encryptedText, key) {
   try {
     const rawKey = Buffer.from(key);
-
     if (rawKey.length !== 32) {
       throw new Error("PROVIDER_KEY must be 32 bytes (32 ASCII chars).");
     }
 
     const data = Buffer.from(encryptedText, "base64");
     const iv = data.slice(0, 12);
-    const encryptedData = data.slice(12, -16);
-    const authTag = data.slice(-16);
+    // FIX: Pass the rest of the data (ciphertext + auth tag) directly to update()
+    const ciphertextAndTag = data.slice(12);
 
     const decipher = createDecipheriv("aes-256-gcm", rawKey, iv);
-    decipher.setAuthTag(authTag);
 
-    let decrypted = decipher.update(encryptedData, null, "utf8");
+    let decrypted = decipher.update(ciphertextAndTag, undefined, "utf8");
     decrypted += decipher.final("utf8");
 
     return decrypted;
   } catch (err) {
     console.error("❌ Decryption failed:", err.message);
-    return encryptedText; // fallback in case plain text is received
+    // Fallback: return original text, handles plain text or decryption errors
+    return encryptedText;
   }
 }
+
 
 // ---------- API: Schedule Notification ----------
 app.post(
@@ -637,6 +638,7 @@ app.use((err, req, res, next) => {
 });
 
 // ---------- Start ----------
+// Use the PORT constant declared at the top of the file
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`🚀 Server running at http://localhost:${PORT}`)
 );

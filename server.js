@@ -21,8 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-// Define PORT once, early on
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 10000; // Define PORT once
 
 // ---------- Validate env vars ----------
 const requiredEnv = [
@@ -220,7 +219,6 @@ function decrypt(encryptedText, key) {
     return encryptedText;
   }
 }
-
 
 // ---------- API: Schedule Notification ----------
 app.post(

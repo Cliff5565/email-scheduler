@@ -194,41 +194,30 @@ async function authenticateFirebase(req, res, next) {
   }
 }
 
-// ---------- Decryption function (Updated to handle plain text) ----------
+// ---------- Decryption function (Updated to use Node.js crypto) ----------
 function decrypt(encryptedText, key) {
-  // Check if the input looks like a base64 encoded string (a common sign of encrypted data)
-  // This is a basic check, you might want to be more specific based on your encryption output
-  const isBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(encryptedText);
-
-  if (!isBase64) {
-    // If it doesn't look like base64, assume it's plain text and return as is
-    console.warn("Decrypt received non-base64 data, assuming plain text:", encryptedText.substring(0, 20) + "...");
-    return encryptedText;
-  }
-
   try {
-    // If it looks like base64, proceed with decryption
-    const data = Buffer.from(encryptedText, 'base64');
-    // AES-GCM uses 16-byte IV + auth tag
-    const iv = data.slice(0, 16); 
-    const encryptedData = data.slice(16, -16); // Exclude auth tag from encrypted data
-    const authTag = data.slice(-16); // Auth tag is at the end
-    
-    const decipher = createDecipheriv('aes-128-gcm', key.slice(0, 16), iv);
-    decipher.setAuthTag(authTag); // Set the authentication tag
-    
-    let decrypted = decipher.update(encryptedData, null, 'utf8');
-    decrypted += decipher.final('utf8');
-    
+    const rawKey = Buffer.from(key);
+
+    if (rawKey.length !== 32) {
+      throw new Error("PROVIDER_KEY must be 32 bytes (32 ASCII chars).");
+    }
+
+    const data = Buffer.from(encryptedText, "base64");
+    const iv = data.slice(0, 12);
+    const encryptedData = data.slice(12, -16);
+    const authTag = data.slice(-16);
+
+    const decipher = createDecipheriv("aes-256-gcm", rawKey, iv);
+    decipher.setAuthTag(authTag);
+
+    let decrypted = decipher.update(encryptedData, null, "utf8");
+    decrypted += decipher.final("utf8");
+
     return decrypted;
   } catch (err) {
-    // If decryption fails, it might be plain text that was incorrectly stored as encrypted
-    // Or it could be genuinely corrupted/invalid encrypted data
-    console.error('Decryption failed (might be plain text or invalid data):', err.message);
-    console.warn('Attempting to return input as plain text:', encryptedText.substring(0, 20) + "...");
-    // As a fallback, return the original input, assuming it was plain text
-    // Be cautious: this could mask other errors, but handles the plain-text case
-    return encryptedText;
+    console.error("❌ Decryption failed:", err.message);
+    return encryptedText; // fallback in case plain text is received
   }
 }
 

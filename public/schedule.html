@@ -279,14 +279,15 @@ button.submit-btn:disabled {
 
 <!-- Firebase -->
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js ";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js ";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js  ";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js  ";
 
-// === AES-256-GCM encryption (Updated functions) ===
+// === AES-256-GCM encryption ===
 async function encrypt(text, key) {
   const encoder = new TextEncoder();
   const rawKey = encoder.encode(key);
 
+  // Enforce 32-byte key for AES-256
   if (rawKey.length !== 32) {
     throw new Error("PROVIDER_KEY must be 32 bytes (32 ASCII chars).");
   }
@@ -331,7 +332,7 @@ async function decrypt(encryptedText, key) {
     ["decrypt"]
   );
 
-  const data = Uint8Array.from(atob(encryptedText), (c) => c.charCodeAt(0));
+  const data = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
   const iv = data.slice(0, 12);
   const encryptedData = data.slice(12);
 
@@ -344,13 +345,17 @@ async function decrypt(encryptedText, key) {
   return decoder.decode(decrypted);
 }
 
-// Get provider key from server or use default (Must be 32 bytes)
+// Get provider key from server or use default (Must be EXACTLY 32 ASCII chars)
 async function getProviderKey() {
-  // In a real app, this would come from the server or a secure config
-  // For this example, you need to provide your actual 32-byte key here.
-  // Example: "mySuperSecret32ByteKey12345678"
-  // Ensure this matches the PROVIDER_KEY environment variable on Render exactly.
-  return "your-actual-32-byte-key-here1234"; // Replace this with your 32-byte key
+  // IMPORTANT: REPLACE THIS PLACEHOLDER WITH YOUR ACTUAL 32-CHARACTER KEY
+  // Example valid key: "My$up3rS3cr3tK3yTh@tIs32Chars!!"
+  // Ensure this matches the raw 32-byte ASCII string set as PROVIDER_KEY in Render.
+  const key = "REPLACE_WITH_YOUR_32_CHAR_KEY_HERE!"; // <-- REPLACE THIS LINE
+  
+  if (key.length !== 32) {
+      throw new Error(`Provided key is ${key.length} characters long. It must be exactly 32 ASCII characters.`);
+  }
+  return key;
 }
 
 const firebaseConfig = {

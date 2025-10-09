@@ -12,7 +12,6 @@ body {
   padding: 0;
   display: flex;
   height: 100vh;
-  overflow: hidden; /* Prevent scrollbars during transition */
 }
 
 /* Sidebar */
@@ -23,9 +22,6 @@ body {
   display:flex;
   flex-direction:column;
   padding:20px 0;
-  transition: width 0.3s;
-  position: relative; /* Ensure toggle button can be positioned relative to this if needed */
-  z-index: 10; /* Ensure sidebar is above main content during collapse */
 }
 .sidebar h2 {
   text-align:center;
@@ -52,55 +48,11 @@ body {
   cursor:pointer;
 }
 
-/* Toggle button - Positioned to the LEFT of the EXPANDED sidebar */
-.toggle-btn {
-  position: absolute;
-  top: 15px;
-  left: 230px; /* Position it to the right of the expanded sidebar (220px width + some padding) */
-  background: #4a4aff;
-  color: white;
-  border: none;
-  border-radius: 0 5px 5px 0; /* Rounded on the right side only */
-  padding: 8px 10px;
-  cursor: pointer;
-  z-index: 101; /* Ensure it's above both sidebar and main content */
-  transition: left 0.3s; /* Smooth transition when sidebar collapses */
-}
-
-/* Adjust toggle button position when sidebar is collapsed */
-.sidebar.collapsed ~ .main .toggle-btn {
-  left: 60px; /* Position it to the right of the collapsed sidebar (60px width) */
-}
-
-/* Collapsed sidebar */
-.sidebar.collapsed {
-  width: 60px;
-}
-.sidebar.collapsed h2,
-.sidebar.collapsed a span,
-.sidebar.collapsed button span {
-  display: none;
-}
-.sidebar.collapsed a {
-  text-align: center;
-  padding: 15px 0;
-}
-.sidebar.collapsed button {
-  margin: 15px 10px;
-  padding: 10px;
-}
-
 /* Main */
 .main {
   flex:1;
   padding:20px;
   overflow-y:auto;
-  transition: margin-left 0.3s;
-  position: relative; /* Ensure it can contain the toggle button if needed */
-}
-
-.main.shifted {
-  margin-left: 60px;
 }
 
 .container {
@@ -157,206 +109,53 @@ button.submit-btn:disabled {
 }
 .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
 .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-
-/* WhatsApp icon */
-.whatsapp-icon {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  background: #25D366;
-  border-radius: 50%;
-  margin-right: 8px;
-  position: relative;
-  vertical-align: middle;
-}
-.whatsapp-icon::after {
-  content: "💬";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 10px;
-}
-
-/* Job list */
-.job-list {
-  margin-top: 30px;
-  max-height: 400px;
-  overflow-y: auto;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 15px;
-}
-.job-item {
-  padding: 12px;
-  border-bottom: 1px solid #eee;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.job-item:last-child {
-  border-bottom: none;
-}
-.job-info {
-  flex: 1;
-}
-.job-actions {
-  display: flex;
-  gap: 8px;
-}
-.btn-action {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-.btn-edit { background: #ffc107; color: #212529; }
-.btn-delete { background: #dc3545; color: white; }
-.btn-cancel { background: #6c757d; color: white; }
 </style>
 </head>
 <body>
-
-<!-- Toggle button - MOVED OUTSIDE the sidebar div -->
-<button class="toggle-btn" id="toggleSidebar">☰</button>
-
 <!-- Sidebar -->
-<div class="sidebar" id="sidebar">
-  <!-- Removed the toggle button from here -->
+<div class="sidebar">
   <h2>Scheduler</h2>
-  <a href="/dashboard.html"><span>📊 Dashboard</span></a>
-  <a href="/schedule" class="active"><span>⏰ Schedule</span></a>
-  <button id="logoutBtn"><span>Logout</span></button>
+  <a href="/dashboard.html">📊 Dashboard</a>
+  <a href="/schedule" class="active">⏰ Schedule</a>
+  <button id="logoutBtn">Logout</button>
 </div>
 
 <!-- Main -->
-<div class="main" id="main">
+<div class="main">
   <div class="container">
     <header>
       <h1>Schedule a Notification</h1>
       <div><span id="user-status" class="user-info">Loading...</span></div>
     </header>
 
-    <!-- Form for scheduling -->
-    <form id="scheduleForm">
-      <!-- Method -->
-      <label for="method">Choose Method:</label>
-      <select id="method" name="method">
-        <option value="whatsapp">WhatsApp</option>
-        <option value="email" selected>Email</option>
-        <option value="sms">SMS</option>
-      </select>
+    <!-- Method -->
+    <label for="method">Choose Method:</label>
+    <select id="method">
+      <option value="email" selected>Email</option>
+      <option value="sms">SMS</option>
+    </select>
 
-      <input type="text" id="to" name="to" placeholder="Recipient (phone for WhatsApp/SMS, email for email)" required />
-      <input type="text" id="subject" name="subject" placeholder="Subject (only for email)" />
-      <textarea id="body" name="body" rows="5" placeholder="Message text" required></textarea>
+    <input type="text" id="to" placeholder="Recipient (email or phone)" required />
+    <input type="text" id="subject" placeholder="Subject (only for email)" />
+    <textarea id="body" rows="5" placeholder="Message text" required></textarea>
 
-      <label for="file">Attach a File (optional):</label>
-      <input type="file" id="file" name="file" />
+    <label for="file">Attach a File (optional):</label>
+    <input type="file" id="file" />
 
-      <label for="datetime">Schedule Time:</label>
-      <input type="datetime-local" id="datetime" name="datetime" required />
+    <label for="datetime">Schedule Time:</label>
+    <input type="datetime-local" id="datetime" required />
 
-      <div id="timezone-display"></div>
+    <div id="timezone-display"></div>
 
-      <input type="hidden" id="jobId" name="jobId" value="" />
-      <button class="submit-btn" id="scheduleBtn" type="submit">Schedule</button>
-      <button class="submit-btn" id="updateBtn" type="submit" style="display:none; background: #28a745;">Update</button>
-      <button class="submit-btn" id="cancelEditBtn" type="button" style="background: #6c757d;">Cancel</button>
-    </form>
-    
+    <button class="submit-btn" id="scheduleBtn" disabled>Schedule</button>
     <div id="result"></div>
-    
-    <!-- Scheduled Jobs -->
-    <h2>Scheduled Notifications</h2>
-    <div id="jobList" class="job-list">
-      <p>Loading scheduled jobs...</p>
-    </div>
   </div>
 </div>
 
 <!-- Firebase -->
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js  ";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js  ";
-
-// === AES-256-GCM encryption ===
-async function encrypt(text, key) {
-  const encoder = new TextEncoder();
-  const rawKey = encoder.encode(key);
-
-  // Enforce 32-byte key for AES-256
-  if (rawKey.length !== 32) {
-    throw new Error("PROVIDER_KEY must be 32 bytes (32 ASCII chars).");
-  }
-
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    rawKey,
-    { name: "AES-GCM" },
-    false,
-    ["encrypt"]
-  );
-
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-
-  const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv },
-    cryptoKey,
-    encoder.encode(text)
-  );
-
-  // Concatenate IV + encrypted data
-  const result = new Uint8Array(iv.length + encrypted.byteLength);
-  result.set(iv, 0);
-  result.set(new Uint8Array(encrypted), iv.length);
-
-  return btoa(String.fromCharCode(...result));
-}
-
-async function decrypt(encryptedText, key) {
-  const decoder = new TextDecoder();
-  const rawKey = new TextEncoder().encode(key);
-
-  if (rawKey.length !== 32) {
-    throw new Error("PROVIDER_KEY must be 32 bytes (32 ASCII chars).");
-  }
-
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    rawKey,
-    { name: "AES-GCM" },
-    false,
-    ["decrypt"]
-  );
-
-  const data = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
-  const iv = data.slice(0, 12);
-  const encryptedData = data.slice(12);
-
-  const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv },
-    cryptoKey,
-    encryptedData
-  );
-
-  return decoder.decode(decrypted);
-}
-
-// Get provider key from server or use default (Must be EXACTLY 32 ASCII chars)
-async function getProviderKey() {
-  // IMPORTANT: REPLACE THIS PLACEHOLDER WITH YOUR ACTUAL 32-CHARACTER KEY
-  // Example valid key: "My$up3rS3cr3tK3yTh@tIs32Chars!!"
-  // Ensure this matches the raw 32-byte ASCII string set as PROVIDER_KEY in Render.
-  const key = "My$up3rS3cr3tK3yTh@tIs32Chars!!!"; // <-- REPLACE THIS LINE
-  
-  if (key.length !== 32) {
-      throw new Error(`Provided key is ${key.length} characters long. It must be exactly 32 ASCII characters.`);
-  }
-  return key;
-}
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAcNhqW9wkLs3S7O5bp4GMJ0SWJ4d-7GRo",
@@ -373,11 +172,8 @@ const auth = getAuth(app);
 // Pre-fill date
 const now = new Date();
 const pad = n => String(n).padStart(2,'0');
-// Set to user's local time in YYYY-MM-DDTHH:MM format
-const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-  .toISOString()
-  .slice(0, 16);
-document.getElementById('datetime').value = localDateTime;
+document.getElementById('datetime').value =
+`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
 // Show timezone
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -414,289 +210,47 @@ document.getElementById('logoutBtn').addEventListener('click', async()=>{
   }
 });
 
-// Toggle sidebar
-document.getElementById('toggleSidebar').addEventListener('click', ()=>{
-  const sidebar = document.getElementById('sidebar');
-  const main = document.getElementById('main');
-  sidebar.classList.toggle('collapsed');
-  main.classList.toggle('shifted');
-});
+// Schedule
+document.getElementById('scheduleBtn').addEventListener('click', async()=>{
+  const method=document.getElementById('method').value;
+  const to=document.getElementById('to').value.trim();
+  const subject=document.getElementById('subject').value.trim();
+  const body=document.getElementById('body').value.trim();
+  const localDateTime=document.getElementById('datetime').value;
+  const file=document.getElementById('file').files[0];
 
-// Load scheduled jobs
-async function loadJobs() {
-  if (!auth.currentUser) return;
-  
-  try {
-    const idToken = await auth.currentUser.getIdToken();
-    const response = await fetch('/api/jobs', {
-      headers: {
-        'Authorization': `Bearer ${idToken}`
-      }
-    });
-    
-    if (!response.ok) throw new Error('Failed to load jobs');
-    
-    const data = await response.json();
-    displayJobs(data.jobs);
-  } catch (err) {
-    showMessage(`Error loading jobs: ${err.message}`, false);
-  }
-}
-
-// Display scheduled jobs
-function displayJobs(jobs) {
-  const jobList = document.getElementById('jobList');
-  
-  if (jobs.length === 0) {
-    jobList.innerHTML = '<p>No scheduled notifications</p>';
-    return;
-  }
-  
-  jobList.innerHTML = '';
-  
-  jobs.forEach(job => {
-    const jobEl = document.createElement('div');
-    jobEl.className = 'job-item';
-    
-    const formattedTime = new Date(job.datetime).toLocaleString();
-    
-    jobEl.innerHTML = `
-      <div class="job-info">
-        <strong>${job.method.toUpperCase()}</strong> to ${job.to} 
-        <br><small>${formattedTime} (${job.timezone})</small>
-        <br><em>${job.body.substring(0, 50)}${job.body.length > 50 ? '...' : ''}</em>
-      </div>
-      <div class="job-actions">
-        <button class="btn-action btn-edit" data-id="${job._id}">Edit</button>
-        <button class="btn-action btn-delete" data-id="${job._id}">Delete</button>
-      </div>
-    `;
-    
-    jobList.appendChild(jobEl);
-  });
-  
-  // Add event listeners for edit/delete buttons
-  document.querySelectorAll('.btn-edit').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const jobId = e.target.dataset.id;
-      editJob(jobId);
-    });
-  });
-  
-  document.querySelectorAll('.btn-delete').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const jobId = e.target.dataset.id;
-      deleteJob(jobId);
-    });
-  });
-}
-
-// Edit job
-async function editJob(jobId) {
-  if (!auth.currentUser) return;
-  
-  try {
-    const idToken = await auth.currentUser.getIdToken();
-    const response = await fetch(`/api/jobs/${jobId}`, {
-      headers: {
-        'Authorization': `Bearer ${idToken}`
-      }
-    });
-    
-    if (!response.ok) throw new Error('Failed to load job');
-    
-    const job = await response.json();
-    
-    // Set form values
-    document.getElementById('jobId').value = job._id;
-    document.getElementById('method').value = job.method;
-    document.getElementById('to').value = job.to;
-    document.getElementById('subject').value = job.subject || '';
-    document.getElementById('body').value = job.body;
-    document.getElementById('datetime').value = job.originalLocalTime;
-    
-    // Switch to update mode
-    document.getElementById('scheduleBtn').style.display = 'none';
-    document.getElementById('updateBtn').style.display = 'block';
-    document.getElementById('cancelEditBtn').style.display = 'block';
-    
-    // Scroll to form
-    document.getElementById('scheduleForm').scrollIntoView({ behavior: 'smooth' });
-  } catch (err) {
-    showMessage(`Error loading job: ${err.message}`, false);
-  }
-}
-
-// Delete job
-async function deleteJob(jobId) {
-  if (!confirm('Are you sure you want to delete this scheduled notification?')) return;
-  
-  if (!auth.currentUser) return;
-  
-  try {
-    const idToken = await auth.currentUser.getIdToken();
-    const response = await fetch(`/api/jobs/${jobId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${idToken}`
-      }
-    });
-    
-    if (!response.ok) throw new Error('Failed to delete job');
-    
-    const result = await response.json();
-    showMessage(result.message, true);
-    loadJobs(); // Reload jobs
-  } catch (err) {
-    showMessage(`Error deleting job: ${err.message}`, false);
-  }
-}
-
-// Cancel edit
-document.getElementById('cancelEditBtn').addEventListener('click', () => {
-  document.getElementById('jobId').value = '';
-  document.getElementById('scheduleForm').reset();
-  document.getElementById('scheduleBtn').style.display = 'block';
-  document.getElementById('updateBtn').style.display = 'none';
-  document.getElementById('cancelEditBtn').style.display = 'none';
-  
-  // Reset to current time
-  const now = new Date();
-  const pad = n => String(n).padStart(2,'0');
-  const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
-  document.getElementById('datetime').value = localDateTime;
-});
-
-// Schedule form submission
-document.getElementById('scheduleForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  
-  const method = document.getElementById('method').value;
-  const to = document.getElementById('to').value.trim();
-  const subject = document.getElementById('subject').value.trim();
-  const body = document.getElementById('body').value.trim();
-  const localDateTime = document.getElementById('datetime').value;
-  const file = document.getElementById('file').files[0];
-  const jobId = document.getElementById('jobId').value;
-  
-  if (!to || !body || !localDateTime) {
-    showMessage("Please fill required fields.", false);
-    return;
-  }
-  if (!auth.currentUser) {
-    showMessage("Not logged in.", false);
-    return;
-  }
+  if(!to||!body||!localDateTime){ showError("Please fill required fields."); return; }
+  if(!auth.currentUser){ showError("Not logged in."); return; }
 
   try {
-    const idToken = await auth.currentUser.getIdToken();
-    const providerKey = await getProviderKey(); // Get the 32-byte key
-    
-    const payload = {
-      method,
-      to: await encrypt(to, providerKey), // Encrypt using new function
-      subject: method === "email" ? await encrypt(subject, providerKey) : undefined,
-      body: await encrypt(body, providerKey), // Encrypt using new function
-      datetime: localDateTime,
-      timezone
-    };
+    const idToken=await auth.currentUser.getIdToken();
+    const payload={method,to,subject:method==="email"?subject:undefined,body,datetime:localDateTime,timezone};
 
     let res;
-    if (file) {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("data", JSON.stringify(payload));
-      
-      if (jobId) {
-        // Update existing job
-        res = await fetch(`/api/jobs/${jobId}`, {
-          method: 'PUT',
-          headers: { // <--- CORRECTED: Removed Content-Type header when using FormData
-            'Authorization': `Bearer ${idToken}`
-          },
-          body: formData
-        });
-      } else {
-        // Create new job
-        res = await fetch('/api/schedule', {
-          method: 'POST',
-          headers: { // <--- CORRECTED: Removed Content-Type header when using FormData
-            'Authorization': `Bearer ${idToken}`
-          },
-          body: formData
-        });
-      }
-    } else {
-      // If no file, send as JSON
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken}`
-      };
-
-      if (jobId) {
-        // Update existing job (no file)
-        res = await fetch(`/api/jobs/${jobId}`, {
-          method: 'PUT',
-          headers: headers,
-          body: JSON.stringify(payload)
-        });
-      } else {
-        // Create new job (no file)
-        res = await fetch('/api/schedule', {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(payload)
-        });
-      }
+    if(file){
+      const formData=new FormData();
+      formData.append("file",file);
+      formData.append("data",JSON.stringify(payload));
+      res=await fetch('/api/schedule',{method:'POST',headers:{Authorization:`Bearer ${idToken}`},body:formData});
+    }else{
+      res=await fetch('/api/schedule',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${idToken}`},
+        body:JSON.stringify(payload)
+      });
     }
-    
-    const result = await res.json();
-    showMessage(result.message || result.error, res.ok);
-    
-    if (res.ok) {
-      // Reset form
-      document.getElementById('jobId').value = '';
-      document.getElementById('scheduleForm').reset();
-      document.getElementById('scheduleBtn').style.display = 'block';
-      document.getElementById('updateBtn').style.display = 'none';
-      document.getElementById('cancelEditBtn').style.display = 'none';
-      
-      // Reset to current time
-      const now = new Date();
-      const pad = n => String(n).padStart(2,'0');
-      const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-        .toISOString()
-        .slice(0, 16);
-      document.getElementById('datetime').value = localDateTime;
-      
-      // Reload jobs
-      loadJobs();
-    }
-  } catch (err) {
-    showMessage("Network error: " + err.message, false);
-  }
+    const result=await res.json();
+    showMessage(result.message||result.error,res.ok);
+  }catch(err){ showError("Network error: "+err.message); }
 });
 
-// Initial load
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    loadJobs();
-  }
-});
-
-function showMessage(msg, success) {
-  const div = document.getElementById('result');
-  div.className = success ? 'success' : 'error';
-  div.textContent = msg;
-  div.style.display = 'block';
-  
-  // Auto-hide after 5 seconds
-  setTimeout(() => {
-    div.style.display = 'none';
-  }, 5000);
+function showMessage(msg,success){
+  const div=document.getElementById('result');
+  div.className=success?'success':'error';
+  div.textContent=msg;
+  div.style.display='block';
 }
+function showError(msg){ showMessage(msg,false); }
 </script>
 </body>
 </html>

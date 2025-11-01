@@ -51,11 +51,11 @@
 
     <input type="email" id="email" class="input" placeholder="Email address" />
     <input type="password" id="password" class="input" placeholder="Password" />
-    <button class="btn btn-primary" onclick="handleLogin()" id="submitBtn">Login</button>
+    <button class="btn btn-primary" onclick="handleSubmit()" id="submitBtn">Login</button>
 
     <small>
-      <span>Don't have an account?</span> 
-      <a href="/register">Register</a>
+      <span id="toggleText">Don’t have an account?</span> 
+      <a onclick="toggleForm()" id="toggleLink">Register</a>
     </small>
 
     <hr/>
@@ -128,8 +128,8 @@
   </div>
 
   <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js  "></script>
-  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js  "></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
 
   <script>
     // ✅ Firebase config (fixed bucket)
@@ -145,17 +145,33 @@
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
-    async function handleLogin() {
+    let isRegister = false;
+
+    function toggleForm() {
+      isRegister = !isRegister;
+      document.getElementById("formTitle").innerText = 
+        isRegister ? "Create your account" : "Login to access your dashboard";
+      document.getElementById("submitBtn").innerText = isRegister ? "Register" : "Login";
+      document.getElementById("toggleText").innerText = isRegister ? "Already have an account?" : "Don’t have an account?";
+      document.getElementById("toggleLink").innerText = isRegister ? "Login" : "Register";
+      document.getElementById("status").innerText = "";
+    }
+
+    async function handleSubmit() {
       const email = document.getElementById("email").value;
       const pass = document.getElementById("password").value;
       try {
-        const userCred = await auth.signInWithEmailAndPassword(email, pass);
-        document.getElementById("status").innerText = "Logged in as " + userCred.user.email;
+        let userCred;
+        if (isRegister) {
+          userCred = await auth.createUserWithEmailAndPassword(email, pass);
+          document.getElementById("status").innerText = "Registered as " + userCred.user.email;
+        } else {
+          userCred = await auth.signInWithEmailAndPassword(email, pass);
+          document.getElementById("status").innerText = "Logged in as " + userCred.user.email;
+        }
         // send token to backend
         const token = await userCred.user.getIdToken();
         localStorage.setItem("idToken", token);
-        // Redirect to dashboard or schedule page after successful login
-        window.location.href = "/schedule";
       } catch (err) {
         document.getElementById("status").innerText = err.message;
       }
@@ -168,7 +184,6 @@
         document.getElementById("status").innerText = "Google login: " + result.user.displayName;
         const token = await result.user.getIdToken();
         localStorage.setItem("idToken", token);
-        window.location.href = "/schedule";
       } catch (err) {
         document.getElementById("status").innerText = err.message;
       }
@@ -181,7 +196,6 @@
         document.getElementById("status").innerText = "Facebook login: " + result.user.displayName;
         const token = await result.user.getIdToken();
         localStorage.setItem("idToken", token);
-        window.location.href = "/schedule";
       } catch (err) {
         document.getElementById("status").innerText = err.message;
       }
@@ -194,7 +208,6 @@
         document.getElementById("status").innerText = "Apple login: " + result.user.displayName;
         const token = await result.user.getIdToken();
         localStorage.setItem("idToken", token);
-        window.location.href = "/schedule";
       } catch (err) {
         document.getElementById("status").innerText = err.message;
       }
@@ -207,7 +220,7 @@
         // refresh token each state change
         const token = await user.getIdToken();
         localStorage.setItem("idToken", token);
-        window.location.href = "/schedule";
+        window.location.href = "/dashboard.html";
       } else {
         console.log("❌ No user signed in");
       }

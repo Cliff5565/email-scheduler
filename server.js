@@ -6,14 +6,13 @@ import { Queue, Worker } from "bullmq";
 import sgMail from "@sendgrid/mail";
 import { fileURLToPath } from "url";
 import IORedis from "ioredis";
-import { zonedTimeToUtc, utcToZonedTime, format } from "date-fns-tz";
+// Updated imports for date-fns-tz v3+
+import { fromZonedTime, toZonedTime, format } from "date-fns-tz";
 import fs from "fs";
-import { EmailJob } from "./models/EmailJob.js"; // Ensure this path is correct
+import { EmailJob } from "./models/EmailJob.js";
 import admin from "firebase-admin";
 import multer from "multer";
 import twilio from "twilio";
-
-// Import crypto for decryption
 import { createDecipheriv } from "crypto";
 
 dotenv.config();
@@ -31,10 +30,10 @@ const requiredEnv = [
   "FIREBASE_PROJECT_ID",
   "FIREBASE_CLIENT_EMAIL",
   "FIREBASE_PRIVATE_KEY",
-  "PROVIDER_KEY", // Added PROVIDER_KEY
+  "PROVIDER_KEY",
   "TWILIO_ACCOUNT_SID",
   "TWILIO_AUTH_TOKEN",
-  "TWILIO_WHATSAPP_NUMBER"
+  "TWILIO_WHATSAPP_NUMBER",
 ];
 const missing = requiredEnv.filter((key) => !process.env[key]);
 if (missing.length > 0) {
@@ -64,7 +63,7 @@ mongoose
 let emailQueue = null;
 let redisClient = null;
 
-// ✅ Initialize Twilio Client
+// ---------- Twilio Client ----------
 let twilioClient = null;
 if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
   twilioClient = twilio(
@@ -78,6 +77,19 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
 
 // ---------- SendGrid ----------
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+// Helper for safe file removal
+async function safeUnlink(filePath) {
+  if (!filePath) return;
+  try {
+    await fs.promises.unlink(filePath);
+    console.log(`🗑️ Deleted temporary file: ${filePath}`);
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.error(`⚠️ Failed to delete file ${filePath}:`, err.message);
+    }
+  }
+}
 
 if (process.env.REDIS_URL) {
   redisClient = new IORedis(process.env.REDIS_URL, {
@@ -126,9 +138,9 @@ if (process.env.REDIS_URL) {
         } else if (method === "sms") {
           if (twilioClient) {
             const message = await twilioClient.messages.create({
-              body: body,
-              from: process.env.TWILIO_PHONE_NUMBER || "MGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // Fallback if not set
-              to: to,
+              body,
+              from: process.env.TWILIO_PHONE_NUMBER || "MGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+              to,
             });
             console.log(`✅ SMS sent (job): ${message.sid} to ${to}`);
           } else {
@@ -137,7 +149,7 @@ if (process.env.REDIS_URL) {
         } else if (method === "whatsapp") {
           if (twilioClient) {
             const message = await twilioClient.messages.create({
-              body: body,
+              body,
               from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
               to: `whatsapp:${to}`,
             });
@@ -153,6 +165,11 @@ if (process.env.REDIS_URL) {
             sentAt: new Date(),
           });
         }
+
+        // Cleanup attachment on success
+        if (attachment?.path) {
+          await safeUnlink(attachment.path);
+        }
       } catch (err) {
         console.error("❌ Notification failed:", err.message);
         if (emailJobId) {
@@ -161,7 +178,7 @@ if (process.env.REDIS_URL) {
             error: err.message,
           });
         }
-        throw err; // let BullMQ retry
+        throw err; // Allow BullMQ retry
       }
     },
     { connection: redisClient }
@@ -194,40 +211,28 @@ async function authenticateFirebase(req, res, next) {
   }
 }
 
-// ---------- Decryption function (Updated to handle plain text) ----------
+// ---------- Decryption function ----------
 function decrypt(encryptedText, key) {
-  // Check if the input looks like a base64 encoded string (a common sign of encrypted data)
-  // This is a basic check, you might want to be more specific based on your encryption output
   const isBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(encryptedText);
 
   if (!isBase64) {
-    // If it doesn't look like base64, assume it's plain text and return as is
-    console.warn("Decrypt received non-base64 data, assuming plain text:", encryptedText.substring(0, 20) + "...");
     return encryptedText;
   }
 
   try {
-    // If it looks like base64, proceed with decryption
-    const data = Buffer.from(encryptedText, 'base64');
-    // AES-GCM uses 16-byte IV + auth tag
-    const iv = data.slice(0, 16); 
-    const encryptedData = data.slice(16, -16); // Exclude auth tag from encrypted data
-    const authTag = data.slice(-16); // Auth tag is at the end
-    
-    const decipher = createDecipheriv('aes-128-gcm', key.slice(0, 16), iv);
-    decipher.setAuthTag(authTag); // Set the authentication tag
-    
-    let decrypted = decipher.update(encryptedData, null, 'utf8');
-    decrypted += decipher.final('utf8');
-    
+    const data = Buffer.from(encryptedText, "base64");
+    const iv = data.slice(0, 16);
+    const encryptedData = data.slice(16, -16);
+    const authTag = data.slice(-16);
+
+    const decipher = createDecipheriv("aes-128-gcm", key.slice(0, 16), iv);
+    decipher.setAuthTag(authTag);
+
+    let decrypted = decipher.update(encryptedData, null, "utf8");
+    decrypted += decipher.final("utf8");
+
     return decrypted;
   } catch (err) {
-    // If decryption fails, it might be plain text that was incorrectly stored as encrypted
-    // Or it could be genuinely corrupted/invalid encrypted data
-    console.error('Decryption failed (might be plain text or invalid data):', err.message);
-    console.warn('Attempting to return input as plain text:', encryptedText.substring(0, 20) + "...");
-    // As a fallback, return the original input, assuming it was plain text
-    // Be cautious: this could mask other errors, but handles the plain-text case
     return encryptedText;
   }
 }
@@ -236,67 +241,63 @@ function decrypt(encryptedText, key) {
 app.post(
   "/api/schedule",
   authenticateFirebase,
-  upload.single("file"), // Handle file upload
+  upload.single("file"),
   async (req, res) => {
     try {
-      // Handle multipart data (file upload) vs JSON
       const data = req.body.data ? JSON.parse(req.body.data) : req.body;
       const { to, subject, body, datetime, timezone, method = "email" } = data;
 
       if (!to || !body || !datetime || !timezone) {
+        if (req.file) await safeUnlink(req.file.path);
         return res.status(400).json({ error: "❌ Missing fields" });
       }
       if (!Intl.supportedValuesOf("timeZone").includes(timezone)) {
+        if (req.file) await safeUnlink(req.file.path);
         return res.status(400).json({ error: "❌ Invalid timezone" });
       }
 
-      // Get provider key
       const providerKey = process.env.PROVIDER_KEY;
-
-      // Decrypt sensitive data
       const decryptedTo = decrypt(to, providerKey);
       const decryptedBody = decrypt(body, providerKey);
       const decryptedSubject = subject ? decrypt(subject, providerKey) : undefined;
 
-      // Validate phone numbers for SMS and WhatsApp
+      // Validate phone numbers
       if (method === "sms" || method === "whatsapp") {
-        const phoneRegex = /^\+[1-9]\d{1,14}$/; // E.164 format
+        const phoneRegex = /^\+[1-9]\d{1,14}$/;
         if (!phoneRegex.test(decryptedTo)) {
+          if (req.file) await safeUnlink(req.file.path);
           return res.status(400).json({
             error: "❌ Invalid phone number. Use E.164 format: +1234567890",
           });
         }
       }
 
-      // Validate WhatsApp number format (specific check if needed)
-      if (method === "whatsapp") {
-        // Additional validation if required, e.g., ensuring it starts with +
-        if (!/^\+/.test(decryptedTo)) {
-          return res.status(400).json({
-            error: "❌ WhatsApp number must start with country code (e.g., +1234567890)",
-          });
-        }
-      }
-
       let scheduledTime;
       try {
-        scheduledTime = zonedTimeToUtc(datetime, timezone);
+        // Updated to use fromZonedTime (date-fns-tz v3+)
+        scheduledTime = fromZonedTime(datetime, timezone);
       } catch {
+        if (req.file) await safeUnlink(req.file.path);
         return res.status(400).json({ error: "❌ Invalid datetime" });
       }
 
       const delayMs = scheduledTime.getTime() - Date.now();
       if (delayMs < 0) {
+        if (req.file) await safeUnlink(req.file.path);
         return res.status(400).json({ error: "❌ Date is in the past" });
       }
 
-      // Handle file attachment
-      const attachment = req.file && method === "email" // Only for email
+      // Cleanup files attached to non-email notifications
+      if (method !== "email" && req.file) {
+        await safeUnlink(req.file.path);
+      }
+
+      const attachment = req.file && method === "email"
         ? { filename: req.file.originalname, path: req.file.path }
         : undefined;
 
       const emailJob = await EmailJob.create({
-        to: decryptedTo, // Store decrypted value in DB
+        to: decryptedTo,
         subject: method === "email" ? decryptedSubject : undefined,
         body: decryptedBody,
         datetime: scheduledTime,
@@ -305,7 +306,7 @@ app.post(
         status: "scheduled",
         userId: req.user.uid,
         method,
-        attachment, // Store attachment info
+        attachment,
       });
 
       if (emailQueue) {
@@ -317,7 +318,7 @@ app.post(
             subject: decryptedSubject,
             body: decryptedBody,
             emailJobId: emailJob._id.toString(),
-            attachment, // Pass attachment to queue
+            attachment,
           },
           {
             id: emailJob._id.toString(),
@@ -327,58 +328,48 @@ app.post(
           }
         );
       } else {
-        // fallback immediate send
-        if (method === "email") {
-          const msg = {
-            to: decryptedTo,
-            from: process.env.SENDGRID_FROM_EMAIL,
-            subject: decryptedSubject,
-            text: decryptedBody,
-            attachments: attachment
-              ? [
-                  {
-                    content: Buffer.from(
-                      await fs.promises.readFile(attachment.path)
-                    ).toString("base64"),
-                    filename: attachment.filename,
-                    type: "application/octet-stream",
-                    disposition: "attachment",
-                  },
-                ]
-              : [],
-          };
-          await sgMail.send(msg);
-          console.log("✅ Immediate email sent via SendGrid to", decryptedTo);
-        } else if (method === "sms") {
-          if (twilioClient) {
-            const message = await twilioClient.messages.create({
+        // Fallback immediate send
+        try {
+          if (method === "email") {
+            const msg = {
+              to: decryptedTo,
+              from: process.env.SENDGRID_FROM_EMAIL,
+              subject: decryptedSubject,
+              text: decryptedBody,
+              attachments: attachment
+                ? [
+                    {
+                      content: Buffer.from(
+                        await fs.promises.readFile(attachment.path)
+                      ).toString("base64"),
+                      filename: attachment.filename,
+                      type: "application/octet-stream",
+                      disposition: "attachment",
+                    },
+                  ]
+                : [],
+            };
+            await sgMail.send(msg);
+          } else if (method === "sms" && twilioClient) {
+            await twilioClient.messages.create({
               body: decryptedBody,
               from: process.env.TWILIO_PHONE_NUMBER || "MGXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
               to: decryptedTo,
             });
-            console.log(
-              `✅ SMS sent immediately: ${message.sid} to ${decryptedTo}`
-            );
-          } else {
-            console.log(`📱 Mock SMS sent immediately to ${decryptedTo}: ${decryptedBody}`);
-          }
-        } else if (method === "whatsapp") {
-          if (twilioClient) {
-            const message = await twilioClient.messages.create({
+          } else if (method === "whatsapp" && twilioClient) {
+            await twilioClient.messages.create({
               body: decryptedBody,
               from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
               to: `whatsapp:${decryptedTo}`,
             });
-            console.log(
-              `✅ WhatsApp sent immediately: ${message.sid} to ${decryptedTo}`
-            );
-          } else {
-            console.log(`💬 Mock WhatsApp sent immediately to ${decryptedTo}: ${decryptedBody}`);
           }
+        } finally {
+          if (attachment?.path) await safeUnlink(attachment.path);
         }
       }
 
-      const localTime = utcToZonedTime(scheduledTime, timezone);
+      // Updated to use toZonedTime (date-fns-tz v3+)
+      const localTime = toZonedTime(scheduledTime, timezone);
       return res.json({
         message: `✅ ${method.toUpperCase()} scheduled for ${format(
           localTime,
@@ -388,6 +379,7 @@ app.post(
         jobId: emailJob._id.toString(),
       });
     } catch (err) {
+      if (req.file) await safeUnlink(req.file.path);
       console.error("❌ Schedule error:", err.message);
       return res.status(500).json({ error: "❌ Server error: " + err.message });
     }
@@ -421,189 +413,147 @@ app.get("/api/jobs", authenticateFirebase, async (req, res) => {
 });
 
 // ---------- API: Update Job ----------
-app.put("/api/jobs/:id", authenticateFirebase, upload.single("file"), async (req, res) => {
-  try {
-    const { id } = req.params;
+app.put(
+  "/api/jobs/:id",
+  authenticateFirebase,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
-    // Handle multipart data (file upload) vs JSON
-    let data;
-    if (req.file || req.body.data) {
-      // If multipart, req.body.data is a string
-      if (typeof req.body.data === 'string') {
-        data = JSON.parse(req.body.data);
+      let data;
+      if (req.file || req.body.data) {
+        data = typeof req.body.data === "string" ? JSON.parse(req.body.data) : req.body;
       } else {
-        // If it's not multipart but still has body data (like JSON)
         data = req.body;
       }
-    } else {
-      // If no file and no body.data, req.body is the data object
-      data = req.body;
-    }
 
-    // Extract fields from the parsed data
-    const { datetime, timezone, subject, body } = data;
+      const { datetime, timezone } = data;
 
-    // Find the job
-    const job = await EmailJob.findById(id);
-    if (!job) {
-      return res.status(404).json({ error: "Job not found" });
-    }
-
-    // Check if user owns the job
-    if (job.userId !== req.user.uid) {
-      return res.status(403).json({ error: "Not authorized to update this job" });
-    }
-
-    // Check if job is already sent or cancelled
-    if (job.status !== "scheduled") {
-      return res.status(400).json({ error: "Cannot update a job that is already sent or cancelled" });
-    }
-
-    // Validate timezone if provided
-    if (timezone && !Intl.supportedValuesOf("timeZone").includes(timezone)) {
-      return res.status(400).json({ error: "❌ Invalid timezone" });
-    }
-
-    // Validate datetime if provided
-    let newScheduledTime;
-    if (datetime) {
-      try {
-        newScheduledTime = zonedTimeToUtc(datetime, timezone || job.timezone);
-      } catch {
-        return res.status(400).json({ error: "❌ Invalid datetime" });
+      const job = await EmailJob.findById(id);
+      if (!job) {
+        if (req.file) await safeUnlink(req.file.path);
+        return res.status(404).json({ error: "Job not found" });
       }
 
-      const delayMs = newScheduledTime.getTime() - Date.now();
-      if (delayMs < 0) {
-        return res.status(400).json({ error: "❌ Date is in the past" });
+      if (job.userId !== req.user.uid) {
+        if (req.file) await safeUnlink(req.file.path);
+        return res.status(403).json({ error: "Not authorized to update this job" });
       }
-    }
 
-    // Get provider key for decryption (if needed for new data)
-    const providerKey = process.env.PROVIDER_KEY;
+      if (job.status !== "scheduled") {
+        if (req.file) await safeUnlink(req.file.path);
+        return res.status(400).json({ error: "Cannot update a job that is already sent or cancelled" });
+      }
 
-    // Handle file attachment for updates
-    let updatedAttachment = job.attachment; // Keep existing attachment if no new one is provided
-    if (req.file && job.method === "email") { // Only process file if method is email and file is provided
-      // Delete old file if it exists
-      if (job.attachment && job.attachment.path) {
+      if (timezone && !Intl.supportedValuesOf("timeZone").includes(timezone)) {
+        if (req.file) await safeUnlink(req.file.path);
+        return res.status(400).json({ error: "❌ Invalid timezone" });
+      }
+
+      let newScheduledTime;
+      if (datetime) {
         try {
-          await fs.promises.unlink(job.attachment.path);
-          console.log(`Deleted old attachment: ${job.attachment.path}`);
-        } catch (unlinkErr) {
-          console.error("Error deleting old attachment:", unlinkErr);
-          // Continue even if deletion fails
+          // Updated to use fromZonedTime
+          newScheduledTime = fromZonedTime(datetime, timezone || job.timezone);
+        } catch {
+          if (req.file) await safeUnlink(req.file.path);
+          return res.status(400).json({ error: "❌ Invalid datetime" });
+        }
+
+        const delayMs = newScheduledTime.getTime() - Date.now();
+        if (delayMs < 0) {
+          if (req.file) await safeUnlink(req.file.path);
+          return res.status(400).json({ error: "❌ Date is in the past" });
         }
       }
-      // Set new attachment - store the original filename and the path where multer saved it
-      updatedAttachment = { filename: req.file.originalname, path: req.file.path };
-    }
-    // Note: Logic for removing attachment via form data could be added here if needed
 
-    // Decrypt potentially updated sensitive data if provided in the multipart data
-    let decryptedTo = job.to; // Keep original if not updating
-    let decryptedSubject = job.subject; // Keep original if not updating
-    let decryptedBody = job.body; // Keep original if not updating
+      const providerKey = process.env.PROVIDER_KEY;
 
-    if (data.to) {
-      decryptedTo = decrypt(data.to, providerKey);
-    }
-    if (data.subject) {
-      decryptedSubject = decrypt(data.subject, providerKey);
-    }
-    if (data.body) {
-      decryptedBody = decrypt(data.body, providerKey);
-    }
+      let updatedAttachment = job.attachment;
+      if (req.file && job.method === "email") {
+        if (job.attachment?.path) {
+          await safeUnlink(job.attachment.path);
+        }
+        updatedAttachment = { filename: req.file.originalname, path: req.file.path };
+      } else if (req.file) {
+        await safeUnlink(req.file.path);
+      }
 
-    // Update job in the queue if it exists
-    if (emailQueue) {
-      await emailQueue.remove(id);
+      let decryptedTo = job.to;
+      let decryptedSubject = job.subject;
+      let decryptedBody = job.body;
 
-      // Add updated job to queue
-      await emailQueue.add(
-        "sendNotification",
+      if (data.to) decryptedTo = decrypt(data.to, providerKey);
+      if (data.subject) decryptedSubject = decrypt(data.subject, providerKey);
+      if (data.body) decryptedBody = decrypt(data.body, providerKey);
+
+      if (emailQueue) {
+        await emailQueue.remove(id);
+
+        await emailQueue.add(
+          "sendNotification",
+          {
+            method: job.method,
+            to: decryptedTo,
+            subject: job.method === "email" ? decryptedSubject : undefined,
+            body: decryptedBody,
+            emailJobId: id,
+            attachment: updatedAttachment,
+          },
+          {
+            id: id,
+            delay: newScheduledTime ? newScheduledTime.getTime() - Date.now() : job.datetime.getTime() - Date.now(),
+            attempts: 3,
+            backoff: { type: "exponential", delay: 2000 },
+          }
+        );
+      }
+
+      const updatedJob = await EmailJob.findByIdAndUpdate(
+        id,
         {
-          method: job.method,
-          to: decryptedTo, // Use potentially updated decrypted value
-          subject: job.method === "email" ? decryptedSubject : undefined, // Use potentially updated decrypted value
-          body: decryptedBody, // Use potentially updated decrypted value
-          emailJobId: id,
-          attachment: updatedAttachment, // Pass updated attachment
+          datetime: newScheduledTime || job.datetime,
+          originalLocalTime: datetime || job.originalLocalTime,
+          timezone: timezone || job.timezone,
+          subject: job.method === "email" ? decryptedSubject : undefined,
+          body: decryptedBody,
+          attachment: updatedAttachment,
         },
-        {
-          id: id,
-          delay: newScheduledTime ? (newScheduledTime.getTime() - Date.now()) : (job.datetime.getTime() - Date.now()),
-          attempts: 3,
-          backoff: { type: "exponential", delay: 2000 },
-        }
+        { new: true }
       );
-    }
 
-    // Update job in database
-    const updatedJob = await EmailJob.findByIdAndUpdate(
-      id,
-      {
-        datetime: newScheduledTime || job.datetime,
-        originalLocalTime: datetime || job.originalLocalTime,
-        timezone: timezone || job.timezone,
-        subject: job.method === "email" ? decryptedSubject : undefined, // Store decrypted value
-        body: decryptedBody, // Store decrypted value
-        attachment: updatedAttachment, // Update attachment field
-        // 'to' is typically not updated, but if it were:
-        // to: decryptedTo
-      },
-      { new: true } // Return the updated document
-    );
-
-    res.json({ message: "Job updated successfully", job: updatedJob });
-  } catch (err) {
-    console.error("❌ Update job error:", err.message);
-    // Attempt to delete the uploaded file if an error occurred during processing
-    if (req.file && req.file.path) {
-      try {
-        await fs.promises.unlink(req.file.path);
-        console.log(`Deleted uploaded file due to error: ${req.file.path}`);
-      } catch (unlinkErr) {
-        console.error("Error deleting uploaded file after error:", unlinkErr);
-      }
+      res.json({ message: "Job updated successfully", job: updatedJob });
+    } catch (err) {
+      console.error("❌ Update job error:", err.message);
+      if (req.file) await safeUnlink(req.file.path);
+      res.status(500).json({ error: "Failed to update job" });
     }
-    res.status(500).json({ error: "Failed to update job" });
   }
-});
+);
 
 // ---------- API: Cancel Job ----------
 app.delete("/api/jobs/:id", authenticateFirebase, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the job
     const job = await EmailJob.findById(id);
     if (!job) {
       return res.status(404).json({ error: "Job not found" });
     }
 
-    // Check if user owns the job
     if (job.userId !== req.user.uid) {
       return res.status(403).json({ error: "Not authorized to cancel this job" });
     }
 
-    // Cancel the job in the queue if it exists
     if (emailQueue) {
       await emailQueue.remove(id);
     }
 
-    // Delete the attachment file if it exists
-    if (job.attachment && job.attachment.path) {
-      try {
-        await fs.promises.unlink(job.attachment.path);
-        console.log(`Deleted attachment file: ${job.attachment.path}`);
-      } catch (unlinkErr) {
-        console.error("Error deleting attachment file:", unlinkErr);
-        // Continue even if deletion fails
-      }
+    if (job.attachment?.path) {
+      await safeUnlink(job.attachment.path);
     }
 
-    // Update job status to cancelled
     await EmailJob.findByIdAndUpdate(id, { status: "cancelled" });
 
     res.json({ message: "Job cancelled successfully" });
@@ -627,15 +577,15 @@ app.post("/api/logout", authenticateFirebase, async (req, res) => {
 
 // ---------- Static pages ----------
 app.get("/", (req, res) =>
-  res.sendFile(path.join(__dirname, "public", "index.html")) // Changed from login.html to index.html
+  res.sendFile(path.join(__dirname, "public", "index.html"))
 );
-app.get("/register", (req, res) => // Added route for register page
+app.get("/register", (req, res) =>
   res.sendFile(path.join(__dirname, "public", "register.html"))
 );
 app.get("/schedule", (req, res) =>
   res.sendFile(path.join(__dirname, "public", "schedule.html"))
 );
-app.use(express.static(path.join(__dirname, "public"), { index: false })); // Ensure static middleware doesn't interfere with root route
+app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
 // ---------- Global Error Handler ----------
 app.use((err, req, res, next) => {

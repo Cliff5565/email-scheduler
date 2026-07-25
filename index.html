@@ -3,55 +3,116 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Email Scheduler Login</title>
+  <title>Notification Scheduler - Auth</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f9fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f4f6f9;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      min-height: 100vh;
       margin: 0;
     }
     .login-box {
       background: white;
       border-radius: 12px;
-      padding: 30px;
+      padding: 32px;
       max-width: 400px;
-      width: 100%;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      width: 90%;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
       text-align: center;
     }
-    .login-box h2 { margin-bottom: 10px; }
+    .login-box h2 {
+      margin: 0 0 8px 0;
+      color: #1a1a1a;
+    }
+    .login-box p {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
     .input {
-      width: 100%; margin-bottom: 15px; padding: 12px;
-      border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
+      width: 100%;
+      margin-bottom: 16px;
+      padding: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input:focus {
+      border-color: #4a4aff;
     }
     .btn {
-      width: 100%; padding: 12px;
-      border: none; border-radius: 6px;
-      font-size: 15px; font-weight: bold;
-      cursor: pointer; margin-bottom: 10px;
-      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: opacity 0.2s;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
     .btn-primary { background: #4a4aff; color: white; }
-    .btn-google   { background: white; border: 1px solid #ccc; }
+    .btn-google { background: white; border: 1px solid #d1d5db; color: #374151; }
     .btn-facebook { background: #1877f2; color: white; }
-    .btn-apple    { background: black; color: white; }
-    .icon { width: 18px; height: 18px; display: inline-block; }
-    small { display: block; margin-top: 15px; }
-    a { color: #4a4aff; cursor: pointer; text-decoration: none; }
+    .btn-apple { background: #000000; color: white; }
+    .icon { width: 18px; height: 18px; flex-shrink: 0; }
+    
+    hr {
+      border: 0;
+      border-top: 1px solid #e5e7eb;
+      margin: 20px 0;
+    }
+    
+    small {
+      display: block;
+      margin-top: 16px;
+      color: #6b7280;
+      font-size: 13px;
+    }
+    a {
+      color: #4a4aff;
+      cursor: pointer;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    #status {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #dc2626;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
   <div class="login-box">
-    <h2>Email Scheduler</h2>
-    <p id="formTitle">Login to access your dashboard</p>
+    <h2>Notification Scheduler</h2>
+    <p id="formTitle">Login to access your schedule</p>
 
-    <input type="email" id="email" class="input" placeholder="Email address" />
-    <input type="password" id="password" class="input" placeholder="Password" />
-    <button class="btn btn-primary" onclick="handleSubmit()" id="submitBtn">Login</button>
+    <form onsubmit="event.preventDefault(); handleSubmit();">
+      <input type="email" id="email" class="input" placeholder="Email address" required />
+      <input type="password" id="password" class="input" placeholder="Password" required />
+      <button type="submit" class="btn btn-primary" id="submitBtn">Login</button>
+    </form>
 
     <small>
       <span id="toggleText">Don’t have an account?</span> 
@@ -61,70 +122,33 @@
     <hr/>
 
     <!-- Google -->
-    <button class="btn btn-google" onclick="loginGoogle()">
+    <button class="btn btn-google" onclick="loginGoogle()" id="btnGoogle">
       <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
-        <path fill="#EA4335"
-          d="M488 261.8c0-17.4-1.5-34.1-4.4-50.4H249v95.3h134.3c-5.8 
-          31.4-23.3 57.9-49.6 75.7v62h80.3c47-43.3 74-107.2 
-          74-182.6z"/>
-        <path fill="#34A853"
-          d="M249 492c66 0 121.1-21.9 161.5-59.6l-80.3-62c-22.3 
-          15-50.9 23.7-81.2 23.7-62.3 
-          0-115.2-42-133.9-98.5h-82.6v61.8C74.7 
-          444.1 156.1 492 249 492z"/>
-        <path fill="#4A90E2"
-          d="M115.1 295.6c-4.6-13.6-7.2-28.2-7.2-43.1s2.6-29.5 
-          7.2-43.1v-61.8H32.5C12 
-          189.9 0 217.4 0 249s12 59.1 32.5 
-          81.4l82.6-61.8z"/>
-        <path fill="#FBBC05"
-          d="M249 100.4c36 0 68.3 12.4 
-          93.8 36.8l70.2-70.2C370.2 
-          25.2 315.1 0 249 0 156.1 0 74.7 
-          47.9 32.5 122.6l82.6 61.8c18.7-56.5 
-          71.6-98.5 133.9-98.5z"/>
+        <path fill="#EA4335" d="M488 261.8c0-17.4-1.5-34.1-4.4-50.4H249v95.3h134.3c-5.8 31.4-23.3 57.9-49.6 75.7v62h80.3c47-43.3 74-107.2 74-182.6z"/>
+        <path fill="#34A853" d="M249 492c66 0 121.1-21.9 161.5-59.6l-80.3-62c-22.3 15-50.9 23.7-81.2 23.7-62.3 0-115.2-42-133.9-98.5h-82.6v61.8C74.7 444.1 156.1 492 249 492z"/>
+        <path fill="#4A90E2" d="M115.1 295.6c-4.6-13.6-7.2-28.2-7.2-43.1s2.6-29.5 7.2-43.1v-61.8H32.5C12 189.9 0 217.4 0 249s12 59.1 32.5 81.4l82.6-61.8z"/>
+        <path fill="#FBBC05" d="M249 100.4c36 0 68.3 12.4 93.8 36.8l70.2-70.2C370.2 25.2 315.1 0 249 0 156.1 0 74.7 47.9 32.5 122.6l82.6 61.8c18.7-56.5 71.6-98.5 133.9-98.5z"/>
       </svg>
       Continue with Google
     </button>
 
     <!-- Facebook -->
-    <button class="btn btn-facebook" onclick="loginFacebook()">
+    <button class="btn btn-facebook" onclick="loginFacebook()" id="btnFacebook">
       <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512">
-        <path fill="white"
-          d="M279.14 288l14.22-92.66h-88.91V134.87c0-25.35 
-           12.42-50.06 52.24-50.06h40.42V6.26S293.3 0 268.08 
-           0c-73.12 0-121.08 44.38-121.08 
-           124.72v70.62H86.41V288h60.59v224h92.66V288z"/>
+        <path fill="white" d="M279.14 288l14.22-92.66h-88.91V134.87c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S293.3 0 268.08 0c-73.12 0-121.08 44.38-121.08 124.72v70.62H86.41V288h60.59v224h92.66V288z"/>
       </svg>
       Continue with Facebook
     </button>
 
     <!-- Apple -->
-    <button class="btn btn-apple" onclick="loginApple()">
+    <button class="btn btn-apple" onclick="loginApple()" id="btnApple">
       <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512">
-        <path fill="white" 
-          d="M318.7 268.7c-.1-36.7 16-64.4 
-          50.7-84.8-19.2-27.6-47.9-43-85.2-46.2-35.8-3.1-74.2 
-          21.3-88.4 21.3-14.6 0-48.1-20.6-74.4-20.1-38 
-          .6-70.9 22-89.8 55.6-38.5 66.8-9.8 
-          165.7 27.6 220.1 18.3 26.5 40 56.3 
-          68.8 55.2 27.5-1.1 38-17.5 
-          71.2-17.5s43.1 17.5 74.4 
-          17c29.7-.5 48.4-26.9 66.7-53.5 
-          21-30.6 29.7-60.3 
-          30.1-61.9-0.8-0.3-57.6-22.1-57.7-87.2zM255.6 
-          70.2c18.7-22.6 31.4-54.1 
-          27.9-85.2-27 
-          1.1-59.6 18-78.9 
-          40.6-17.3 
-          19.8-32.6 51.6-28.5 82.4 
-          30.2 2.3 
-          61.1-15.3 79.5-37.8z"/>
+        <path fill="white" d="M318.7 268.7c-.1-36.7 16-64.4 50.7-84.8-19.2-27.6-47.9-43-85.2-46.2-35.8-3.1-74.2 21.3-88.4 21.3-14.6 0-48.1-20.6-74.4-20.1-38 .6-70.9 22-89.8 55.6-38.5 66.8-9.8 165.7 27.6 220.1 18.3 26.5 40 56.3 68.8 55.2 27.5-1.1 38-17.5 71.2-17.5s43.1 17.5 74.4 17c29.7-.5 48.4-26.9 66.7-53.5 21-30.6 29.7-60.3 30.1-61.9-0.8-0.3-57.6-22.1-57.7-87.2zM255.6 70.2c18.7-22.6 31.4-54.1 27.9-85.2-27 1.1-59.6 18-78.9 40.6-17.3 19.8-32.6 51.6-28.5 82.4 30.2 2.3 61.1-15.3 79.5-37.8z"/>
       </svg>
       Continue with Apple
     </button>
 
-    <small id="status"></small>
+    <div id="status"></div>
   </div>
 
   <!-- Firebase SDKs -->
@@ -132,7 +156,6 @@
   <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
 
   <script>
-    // ✅ Firebase config (fixed bucket)
     const firebaseConfig = {
       apiKey: "AIzaSyAcNhqW9wkLs3S7O5bp4GMJ0SWJ4d-7GRo",
       authDomain: "email-scheduler-80501.firebaseapp.com",
@@ -142,87 +165,93 @@
       appId: "1:357118084169:web:1140c0a3f67f0e9bdfeb98",
       measurementId: "G-96971SLQXH"
     };
+
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
     let isRegister = false;
 
+    function setStatus(msg, isError = true) {
+      const statusEl = document.getElementById("status");
+      statusEl.style.color = isError ? "#dc2626" : "#16a34a";
+      statusEl.innerText = msg;
+    }
+
     function toggleForm() {
       isRegister = !isRegister;
       document.getElementById("formTitle").innerText = 
-        isRegister ? "Create your account" : "Login to access your dashboard";
+        isRegister ? "Create your account" : "Login to access your schedule";
       document.getElementById("submitBtn").innerText = isRegister ? "Register" : "Login";
       document.getElementById("toggleText").innerText = isRegister ? "Already have an account?" : "Don’t have an account?";
       document.getElementById("toggleLink").innerText = isRegister ? "Login" : "Register";
-      document.getElementById("status").innerText = "";
+      
+      document.getElementById("email").value = "";
+      document.getElementById("password").value = "";
+      setStatus("", false);
     }
 
     async function handleSubmit() {
-      const email = document.getElementById("email").value;
+      const email = document.getElementById("email").value.trim();
       const pass = document.getElementById("password").value;
+      const submitBtn = document.getElementById("submitBtn");
+
+      if (!email || !pass) {
+        setStatus("Please fill in both fields.");
+        return;
+      }
+
       try {
-        let userCred;
+        submitBtn.disabled = true;
+        submitBtn.innerText = isRegister ? "Registering..." : "Logging in...";
+        setStatus("", false);
+
         if (isRegister) {
-          userCred = await auth.createUserWithEmailAndPassword(email, pass);
-          document.getElementById("status").innerText = "Registered as " + userCred.user.email;
+          await auth.createUserWithEmailAndPassword(email, pass);
         } else {
-          userCred = await auth.signInWithEmailAndPassword(email, pass);
-          document.getElementById("status").innerText = "Logged in as " + userCred.user.email;
+          await auth.signInWithEmailAndPassword(email, pass);
         }
-        // send token to backend
-        const token = await userCred.user.getIdToken();
-        localStorage.setItem("idToken", token);
       } catch (err) {
-        document.getElementById("status").innerText = err.message;
+        setStatus(err.message);
+        submitBtn.disabled = false;
+        submitBtn.innerText = isRegister ? "Register" : "Login";
       }
     }
 
-    async function loginGoogle() {
-      const provider = new firebase.auth.GoogleAuthProvider();
+    async function handleSocialLogin(provider) {
       try {
-        const result = await auth.signInWithPopup(provider);
-        document.getElementById("status").innerText = "Google login: " + result.user.displayName;
-        const token = await result.user.getIdToken();
-        localStorage.setItem("idToken", token);
+        setStatus("", false);
+        await auth.signInWithPopup(provider);
       } catch (err) {
-        document.getElementById("status").innerText = err.message;
+        setStatus(err.message);
       }
     }
 
-    async function loginFacebook() {
-      const provider = new firebase.auth.FacebookAuthProvider();
-      try {
-        const result = await auth.signInWithPopup(provider);
-        document.getElementById("status").innerText = "Facebook login: " + result.user.displayName;
-        const token = await result.user.getIdToken();
-        localStorage.setItem("idToken", token);
-      } catch (err) {
-        document.getElementById("status").innerText = err.message;
-      }
+    function loginGoogle() {
+      handleSocialLogin(new firebase.auth.GoogleAuthProvider());
     }
 
-    async function loginApple() {
-      const provider = new firebase.auth.OAuthProvider("apple.com");
-      try {
-        const result = await auth.signInWithPopup(provider);
-        document.getElementById("status").innerText = "Apple login: " + result.user.displayName;
-        const token = await result.user.getIdToken();
-        localStorage.setItem("idToken", token);
-      } catch (err) {
-        document.getElementById("status").innerText = err.message;
-      }
+    function loginFacebook() {
+      handleSocialLogin(new firebase.auth.FacebookAuthProvider());
     }
 
-    // ✅ Monitor login
+    function loginApple() {
+      handleSocialLogin(new firebase.auth.OAuthProvider("apple.com"));
+    }
+
+    // Monitor Auth state & Sync with LocalStorage
     auth.onAuthStateChanged(async (user) => {
       if (user) {
-        console.log("Auth state changed: user logged in", user.email);
-        // refresh token each state change
-        const token = await user.getIdToken();
-        localStorage.setItem("idToken", token);
-        window.location.href = "/schedule";
+        try {
+          const token = await user.getIdToken(/* forceRefresh */ true);
+          localStorage.setItem("idToken", token);
+          
+          // Redirect directly to the dashboard page served by the backend
+          window.location.href = "/schedule";
+        } catch (err) {
+          setStatus("Failed to authenticate session token.");
+        }
       } else {
-        console.log("❌ No user signed in");
+        localStorage.removeItem("idToken");
       }
     });
   </script>

@@ -220,7 +220,7 @@
         // refresh token each state change
         const token = await user.getIdToken();
         localStorage.setItem("idToken", token);
-        window.location.href = "/schedule";
+        window.location.href = "/dashboard.html";
       } else {
         console.log("❌ No user signed in");
       }

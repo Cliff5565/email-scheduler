@@ -6,88 +6,171 @@
 <title>⏰ Schedule Notification</title>
 <style>
 body {
-  font-family: Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background: #f9fafc;
   margin: 0;
   padding: 0;
   display: flex;
   height: 100vh;
+  overflow: hidden;
 }
 
 /* Sidebar */
 .sidebar {
-  width:220px;
-  background:#222;
-  color:white;
-  display:flex;
-  flex-direction:column;
-  padding:20px 0;
+  width: 220px;
+  background: #1f2937;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+  transition: width 0.3s ease;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
 }
 .sidebar h2 {
-  text-align:center;
-  margin-bottom:30px;
-  color:#4a90e2;
+  text-align: center;
+  margin-bottom: 30px;
+  color: #60a5fa;
+  font-size: 1.3rem;
+  white-space: nowrap;
 }
 .sidebar a {
-  padding:12px 20px;
-  text-decoration:none;
-  color:white;
-  display:block;
+  padding: 12px 20px;
+  text-decoration: none;
+  color: #d1d5db;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
 }
 .sidebar a:hover, .sidebar a.active {
-  background:#4a90e2;
-  cursor:pointer;
+  background: #374151;
+  color: #ffffff;
+  cursor: pointer;
 }
 .sidebar button {
-  margin:20px;
-  padding:10px;
-  border:none;
-  border-radius:5px;
-  background:#ff4d4d;
-  color:white;
-  cursor:pointer;
+  margin: auto 20px 20px 20px;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: #ef4444;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Toggle button */
+.toggle-btn {
+  position: absolute;
+  top: 15px;
+  left: 230px;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 12px;
+  cursor: pointer;
+  z-index: 101;
+  transition: left 0.3s ease;
+}
+
+/* Collapsed sidebar */
+.sidebar.collapsed {
+  width: 60px;
+}
+.sidebar.collapsed h2,
+.sidebar.collapsed a span,
+.sidebar.collapsed button span {
+  display: none;
+}
+.sidebar.collapsed a {
+  justify-content: center;
+  padding: 15px 0;
+}
+.sidebar.collapsed button {
+  margin: auto 10px 20px 10px;
+  padding: 10px;
+}
+
+/* Adjust toggle button when collapsed */
+.sidebar.collapsed + .toggle-btn {
+  left: 60px;
 }
 
 /* Main */
 .main {
-  flex:1;
-  padding:20px;
-  overflow-y:auto;
+  flex: 1;
+  padding: 20px 30px;
+  overflow-y: auto;
+  transition: all 0.3s ease;
 }
 
 .container {
-  max-width: 600px;
+  max-width: 620px;
   margin: 20px auto;
-  padding: 20px;
+  padding: 24px;
   background: white;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  border: 1px solid #e5e7eb;
 }
 
 header {
   margin-bottom: 20px;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 12px;
+}
+
+header h1 {
+  margin: 0 0 6px 0;
+  font-size: 1.5rem;
+  color: #111827;
 }
 
 .user-info {
-  color: #555;
+  color: #6b7280;
   font-size: 14px;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #374151;
+  margin-top: 14px;
+  margin-bottom: 4px;
 }
 
 input, textarea, select {
   width: 100%;
-  padding: 12px;
-  margin: 10px 0;
-  border: 1px solid #ccc;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid #d1d5db;
   border-radius: 6px;
   font-size: 14px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.timezone-info {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 2px;
+  margin-bottom: 10px;
 }
 
 button.submit-btn {
   width: 100%;
   padding: 12px;
-  background: #4a4aff;
+  background: #4f46e5;
   color: white;
   border: none;
   border-radius: 6px;
@@ -95,9 +178,13 @@ button.submit-btn {
   font-weight: bold;
   cursor: pointer;
   margin-top: 15px;
+  transition: background 0.2s;
+}
+button.submit-btn:hover {
+  background: #4338ca;
 }
 button.submit-btn:disabled {
-  background: #ccc;
+  background: #9ca3af;
   cursor: not-allowed;
 }
 
@@ -106,22 +193,28 @@ button.submit-btn:disabled {
   padding: 12px;
   border-radius: 6px;
   display: none;
+  font-size: 14px;
+  font-weight: 500;
 }
-.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+.success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
 </style>
 </head>
 <body>
+
 <!-- Sidebar -->
-<div class="sidebar">
+<div class="sidebar" id="sidebar">
   <h2>Scheduler</h2>
-  <a href="/dashboard.html">📊 Dashboard</a>
-  <a href="/schedule" class="active">⏰ Schedule</a>
-  <button id="logoutBtn">Logout</button>
+  <a href="/"><span>📊 Dashboard</span></a>
+  <a href="/schedule" class="active"><span>⏰ Schedule</span></a>
+  <button id="logoutBtn"><span>Logout</span></button>
 </div>
 
+<!-- Toggle Button -->
+<button class="toggle-btn" id="toggleSidebar">☰</button>
+
 <!-- Main -->
-<div class="main">
+<div class="main" id="main">
   <div class="container">
     <header>
       <h1>Schedule a Notification</h1>
@@ -129,30 +222,37 @@ button.submit-btn:disabled {
     </header>
 
     <!-- Method -->
-    <label for="method">Choose Method:</label>
+    <label for="method">Delivery Method</label>
     <select id="method">
-      <option value="email" selected>Email</option>
-      <option value="sms">SMS</option>
+      <option value="email" selected>📧 Email</option>
+      <option value="sms">📱 SMS</option>
+      <option value="whatsapp">💬 WhatsApp</option>
     </select>
 
-    <input type="text" id="to" placeholder="Recipient (email or phone)" required />
-    <input type="text" id="subject" placeholder="Subject (only for email)" />
-    <textarea id="body" rows="5" placeholder="Message text" required></textarea>
+    <label for="to" id="toLabel">Recipient Email</label>
+    <input type="text" id="to" placeholder="name@example.com" required />
 
-    <label for="file">Attach a File (optional):</label>
+    <div id="subjectGroup">
+      <label for="subject">Subject Line</label>
+      <input type="text" id="subject" placeholder="Enter subject line..." />
+    </div>
+
+    <label for="body">Message Body</label>
+    <textarea id="body" rows="5" placeholder="Type your message here..." required></textarea>
+
+    <label for="file">Attachment (Optional, Email only)</label>
     <input type="file" id="file" />
 
-    <label for="datetime">Schedule Time:</label>
+    <label for="datetime">Scheduled Delivery Time</label>
     <input type="datetime-local" id="datetime" required />
+    <div id="timezone-display" class="timezone-info"></div>
 
-    <div id="timezone-display"></div>
-
-    <button class="submit-btn" id="scheduleBtn" disabled>Schedule</button>
+    <button class="submit-btn" id="scheduleBtn" disabled>Schedule Notification</button>
     <div id="result"></div>
   </div>
 </div>
 
-<!-- Firebase -->
+<!-- Firebase Script -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
@@ -169,16 +269,37 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-// Pre-fill date
+// Pre-fill datetime-local picker with current time
 const now = new Date();
-const pad = n => String(n).padStart(2,'0');
+const pad = n => String(n).padStart(2, '0');
 document.getElementById('datetime').value =
-`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-// Show timezone
+// Display client timezone
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-document.getElementById('timezone-display').textContent = `Your timezone: ${timezone}`;
+document.getElementById('timezone-display').textContent = `Timezone context: ${timezone}`;
 
+// Handle dynamic method layout changes
+const methodSelect = document.getElementById('method');
+const subjectGroup = document.getElementById('subjectGroup');
+const toLabel = document.getElementById('toLabel');
+const toInput = document.getElementById('to');
+
+function handleMethodChange() {
+  const selectedMethod = methodSelect.value;
+  if (selectedMethod === 'email') {
+    subjectGroup.style.display = 'block';
+    toLabel.textContent = 'Recipient Email';
+    toInput.placeholder = 'name@example.com';
+  } else {
+    subjectGroup.style.display = 'none';
+    toLabel.textContent = 'Recipient Phone Number (E.164 format)';
+    toInput.placeholder = '+1234567890';
+  }
+}
+methodSelect.addEventListener('change', handleMethodChange);
+
+// Auth Status Observer
 function updateUserStatus(user) {
   const statusEl = document.getElementById('user-status');
   const scheduleBtn = document.getElementById('scheduleBtn');
@@ -193,64 +314,114 @@ function updateUserStatus(user) {
 }
 onAuthStateChanged(auth, updateUserStatus);
 
-// Logout
-document.getElementById('logoutBtn').addEventListener('click', async()=>{
+// Logout Handler
+document.getElementById('logoutBtn').addEventListener('click', async () => {
   try {
-    if(auth.currentUser){
+    if (auth.currentUser) {
       const token = await auth.currentUser.getIdToken();
-      await fetch('/api/logout',{
-        method:'POST',
-        headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'}
+      await fetch('/api/logout', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
     }
     await signOut(auth);
-    window.location.href="/";
-  }catch(err){
-    alert("Logout failed: "+err.message);
+    window.location.href = "/";
+  } catch (err) {
+    alert("Logout failed: " + err.message);
   }
 });
 
-// Schedule
-document.getElementById('scheduleBtn').addEventListener('click', async()=>{
-  const method=document.getElementById('method').value;
-  const to=document.getElementById('to').value.trim();
-  const subject=document.getElementById('subject').value.trim();
-  const body=document.getElementById('body').value.trim();
-  const localDateTime=document.getElementById('datetime').value;
-  const file=document.getElementById('file').files[0];
+// Schedule Form Submission Handler
+document.getElementById('scheduleBtn').addEventListener('click', async () => {
+  const scheduleBtn = document.getElementById('scheduleBtn');
+  const method = document.getElementById('method').value;
+  const to = document.getElementById('to').value.trim();
+  const subject = document.getElementById('subject').value.trim();
+  const body = document.getElementById('body').value.trim();
+  const localDateTime = document.getElementById('datetime').value;
+  const file = document.getElementById('file').files[0];
 
-  if(!to||!body||!localDateTime){ showError("Please fill required fields."); return; }
-  if(!auth.currentUser){ showError("Not logged in."); return; }
+  if (!to || !body || !localDateTime) { 
+    showError("Please fill out all required fields."); 
+    return; 
+  }
+  if (!auth.currentUser) { 
+    showError("Authentication session expired. Please log in again."); 
+    return; 
+  }
+
+  scheduleBtn.disabled = true;
+  scheduleBtn.textContent = "Scheduling...";
 
   try {
-    const idToken=await auth.currentUser.getIdToken();
-    const payload={method,to,subject:method==="email"?subject:undefined,body,datetime:localDateTime,timezone};
+    const idToken = await auth.currentUser.getIdToken();
+    const payload = {
+      method,
+      to,
+      subject: method === "email" ? subject : undefined,
+      body,
+      datetime: localDateTime,
+      timezone
+    };
 
     let res;
-    if(file){
-      const formData=new FormData();
-      formData.append("file",file);
-      formData.append("data",JSON.stringify(payload));
-      res=await fetch('/api/schedule',{method:'POST',headers:{Authorization:`Bearer ${idToken}`},body:formData});
-    }else{
-      res=await fetch('/api/schedule',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${idToken}`},
-        body:JSON.stringify(payload)
+    if (file && method === "email") {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("data", JSON.stringify(payload));
+      res = await fetch('/api/schedule', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${idToken}` },
+        body: formData
+      });
+    } else {
+      res = await fetch('/api/schedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify(payload)
       });
     }
-    const result=await res.json();
-    showMessage(result.message||result.error,res.ok);
-  }catch(err){ showError("Network error: "+err.message); }
+    
+    const result = await res.json();
+    if (res.ok) {
+      showMessage(result.message || "Notification scheduled successfully!", true);
+      document.getElementById('to').value = "";
+      document.getElementById('subject').value = "";
+      document.getElementById('body').value = "";
+      document.getElementById('file').value = "";
+    } else {
+      showError(result.error || "Failed to schedule notification.");
+    }
+  } catch (err) { 
+    showError("Network error: " + err.message); 
+  } finally {
+    scheduleBtn.disabled = false;
+    scheduleBtn.textContent = "Schedule Notification";
+  }
 });
 
-function showMessage(msg,success){
-  const div=document.getElementById('result');
-  div.className=success?'success':'error';
-  div.textContent=msg;
-  div.style.display='block';
+function showMessage(msg, success) {
+  const div = document.getElementById('result');
+  div.className = success ? 'success' : 'error';
+  div.textContent = msg;
+  div.style.display = 'block';
 }
-function showError(msg){ showMessage(msg,false); }
+
+function showError(msg) { 
+  showMessage(msg, false); 
+}
+
+// Sidebar Toggle Functionality
+document.getElementById('toggleSidebar').addEventListener('click', () => {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.toggle('collapsed');
+});
 </script>
 </body>
 </html>
